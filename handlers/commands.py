@@ -23,14 +23,12 @@ db = DB()
 ADMIN_PASSWORD = "sm10082x3%"  # пароль для админки
 
 
-# --- Вспомогательные функции ---
 def ensure_and_update_offline(user_id: int, username: str):
-    """Создает пользователя, если его нет, и применяет оффлайн-награду."""
     db.create_user_if_not_exists(user_id, username)
     user = db.get_user(user_id)
     if not user:
         raise RuntimeError("Не получилось создать пользователя в базе данных.")
-    apply_offline_gain(user_id)
+    apply_offline_gain(user)  # ← передаём user, а не user_id
     return db.get_user(user_id)
 
 

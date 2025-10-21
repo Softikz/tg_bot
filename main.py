@@ -8,7 +8,7 @@ from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
-API_TOKEN = "ВАШ_ТОКЕН"  # замени на свой токен
+API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es" 
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -7,8 +7,8 @@ import time
 import asyncio
 from typing import Dict
 
-from storage.db import DB
-from game.logic import (
+from banana_bot.storage.db import DB
+from banana_bot.game.logic import (
     apply_offline_gain,
     cost_for_upgrade,
     effective_per_click,
@@ -27,7 +27,7 @@ def ensure_and_update_offline(user_id: int, username: str):
     user = db.get_user(user_id)
     if not user:
         raise RuntimeError("Не получилось создать пользователя в базе данных.")
-    apply_offline_gain(user)  # передаём user
+    apply_offline_gain(user)
     return db.get_user(user_id)
 
 
@@ -61,7 +61,6 @@ def shop_keyboard(user: Dict):
         [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")],
         [InlineKeyboardButton(text="⬅ Назад", callback_data="profile")]
     ])
-
 
 # --- Команды ---
 @router.message(Command("start"))
@@ -113,7 +112,6 @@ async def shop_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(shop_text(user), reply_markup=shop_keyboard(user))
 
-
 # --- Callback-хендлеры ---
 @router.callback_query(F.data == "click")
 async def cb_click(query: CallbackQuery):
@@ -146,35 +144,6 @@ async def cb_profile(query: CallbackQuery):
     await query.answer()
     user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
     await query.message.edit_text(profile_text(user))
-
-
-# --- Покупки ---
-@router.callback_query(F.data.startswith("buy_"))
-async def cb_buy(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
-    kind = query.data[4:]
-    lvl = user['upgrades'].get(kind if kind != "gold" else "gold", 0)
-    cost = cost_for_upgrade(kind, lvl)
-    if user['bananas'] < cost:
-        await query.message.answer("Недостаточно бананов 😢")
-        return
-    update_kwargs = {"bananas": user['bananas'] - cost}
-    if kind == "click":
-        update_kwargs["per_click"] = user['per_click'] + 1
-    elif kind == "collector":
-        update_kwargs["per_second"] = user['per_second'] + 1
-    elif kind == "gold":
-        gold_expires = max(time.time(), user.get("gold_expires", 0)) + GOLD_DURATION
-        update_kwargs["gold_expires"] = gold_expires
-        await query.message.answer(f"✨ Золотой банан активен до {time.ctime(int(gold_expires))}")
-    upgrades = user['upgrades'].copy()
-    upgrades[kind] = lvl + 1
-    update_kwargs["upgrades"] = upgrades
-    db.update_user(query.from_user.id, **update_kwargs)
-    user = db.get_user(query.from_user.id)
-    await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
-
 
 # --- Перерождение ---
 REQUIREMENTS = [
@@ -218,11 +187,44 @@ async def confirm_rebirth(query: CallbackQuery):
         await query.message.answer("⚠️ Недостаточно бананов или золотых бананов для перерождения.")
         return
 
-    # списываем бананы и золото
     new_upgrades = user["upgrades"].copy()
     if req.get("gold",0) > 0:
         new_upgrades["gold"] -= req["gold"]
+
     db.update_user(query.from_user.id, bananas=0, per_click=1, per_second=0, upgrades=new_upgrades)
     db.update_user(query.from_user.id, rebirths=rebirth_count+1)
 
     await query.message.answer("🌟 Вы переродились! Прогресс сброшен, получен бонус пассивного дохода.")
+
+
+# --- 📢 Рассылка всем пользователям ---
+@router.message(Command("broadcast"))
+async def broadcast_command(message: types.Message):
+    """
+    Рассылка всем пользователям.
+    Пример: /broadcast sm10082x3% Технические работы через 5 минут.
+    """
+    args = message.text.split(maxsplit=2)
+    if len(args) < 3:
+        await message.answer("⚠️ Использование: /broadcast <пароль> <текст>")
+        return
+
+    _, password, text = args
+    if password != ADMIN_PASSWORD:
+        await message.answer("❌ Неверный пароль.")
+        return
+
+    users = db.get_all_users()
+    total = len(users)
+    sent = 0
+
+    for u in users:
+        try:
+            await message.bot.send_message(u["user_id"], f"📢 {text}")
+            sent += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            continue
+
+    percent = (sent / total * 100) if total else 0
+    await message.answer(f"✅ Отправлено {sent}/{total} пользователям ({percent:.1f}%)")

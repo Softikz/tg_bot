@@ -7,8 +7,8 @@ import time
 import asyncio
 from typing import Dict
 
-from banana_bot.storage.db import DB
-from banana_bot.game.logic import (
+from storage.db import DB
+from game.logic import (
     apply_offline_gain,
     cost_for_upgrade,
     effective_per_click,

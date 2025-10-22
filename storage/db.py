@@ -56,6 +56,12 @@ class DB:
         rows = self.cur.fetchall()
         return [dict(row) for row in rows]
 
+    def get_all_users(self):
+        cur = self.conn.cursor()
+        cur.execute("SELECT user_id, username FROM users")
+        rows = cur.fetchall()
+        return [{"user_id": r[0], "username": r[1]} for r in rows]
+
     # --- ↓↓↓ Добавленные методы из твоего кода ↓↓↓ ---
 
     def reset_user_progress(self, user_id: int):

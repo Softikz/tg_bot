@@ -3,8 +3,6 @@ import asyncio
 import logging
 import signal
 from aiogram import Bot, Dispatcher, types
-import sys
-import os
 
 
 from handlers.commands import router
@@ -12,8 +10,6 @@ from storage.db import DB
 from game.logic import apply_offline_gain
 
 API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
-
-sys.path.append(os.path.join(os.path.dirname(__file__), "banana_bot"))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

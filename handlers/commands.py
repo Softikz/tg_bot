@@ -6,6 +6,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import time
 import asyncio
 from typing import Dict
+import logging
+
 
 from storage.db import DB
 from game.logic import (
@@ -20,7 +22,7 @@ from game.logic import (
 router = Router()
 db = DB()
 ADMIN_PASSWORD = "sm10082x3%"  # пароль для админки
-
+log = logging.getLogger(__name__)
 # --- Вспомогательные функции ---
 def ensure_and_update_offline(user_id: int, username: str):
     """
@@ -281,6 +283,32 @@ async def broadcast_command(message: types.Message):
             await asyncio.sleep(0.05)
         except Exception:
             continue
+
+
+    @router.callback_query()
+    async def _debug_unhandled_callback(query: CallbackQuery):
+        # если уже был обработан — ничего не сделаем (aiogram не вызывает этот хендлер, если ранее совпал другой)
+        # но если сюда попадаем — значит для этого callback_data не найден конкретный хендлер
+        log.info("⚠️ Unhandled callback_query received. from=%s data=%s message_id=%s",
+                 query.from_user.id, query.data, getattr(query.message, "message_id", None))
+        # ответим пользователю маленьким alert, чтобы было видно в клиенте
+        try:
+            await query.answer(f"Неизвестная кнопка: {query.data}", show_alert=False)
+        except Exception:
+            pass
+        # отправим подробный лог в чат (удалите/закомментируйте в продакшене)
+        try:
+            await query.message.reply(f"DEBUG: callback_data = <code>{query.data}</code>")
+        except Exception:
+            pass
+
+    # Логируем все обычные сообщения, которые не попали под другие handlers
+    @router.message()
+    async def _debug_unhandled_message(message: types.Message):
+        log.info("⚠️ Unhandled message: from=%s text=%s", message.from_user.id, message.text)
+        # не отвечаем пользователю, только лог
+        # если хотите — можно присылать подсказку:
+        # await message.reply("Я не распознал это сообщение. Воспользуйтесь кнопками в меню.")
 
     percent = (sent / total * 100) if total else 0
     await message.answer(f"✅ Отправлено {sent}/{total} пользователям ({percent:.1f}%)")

@@ -7,7 +7,7 @@ from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
-API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
+API_TOKEN = "ВАШ_ТОКЕН_ТУТ"  # вставь свой токен бота
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -37,10 +37,10 @@ async def main():
     bot = Bot(token=API_TOKEN, parse_mode="HTML")
     dp = Dispatcher()
 
-    # ✅ Подключаем router ДО старта
+    # Подключаем роутеры
     dp.include_router(router)
 
-    # ✅ Фоновая задача
+    # Фоновая задача пассивного дохода
     asyncio.create_task(passive_income_loop(db))
 
     # --- Обработка сигналов ---
@@ -57,7 +57,6 @@ async def main():
         except NotImplementedError:
             pass
 
-    # ✅ Старт бота
     try:
         await dp.start_polling(bot)
     except Exception as e:

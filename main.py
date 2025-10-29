@@ -7,14 +7,14 @@ from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
-API_TOKEN = "ВАШ_ТОКЕН_ТУТ"  # вставь свой токен бота
+# <-- ВАЖНО: поставь сюда свой токен
+API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 
 async def passive_income_loop(db: DB, interval: int = 1):
-    """Фоновая задача — начисление пассивного дохода."""
     logger.info("🟢 Passive income loop started")
     while True:
         try:
@@ -37,13 +37,13 @@ async def main():
     bot = Bot(token=API_TOKEN, parse_mode="HTML")
     dp = Dispatcher()
 
-    # Подключаем роутеры
+    # подключаем роутер (handlers/commands.py импортирует router)
     dp.include_router(router)
 
-    # Фоновая задача пассивного дохода
+    # запуск фоновой задачи
     asyncio.create_task(passive_income_loop(db))
 
-    # --- Обработка сигналов ---
+    # обработка сигналов для корректной остановки
     stop_event = asyncio.Event()
 
     def _signal_handler():

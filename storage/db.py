@@ -2,6 +2,7 @@
 import sqlite3
 import json
 import time
+from typing import List, Dict
 
 class DB:
     def __init__(self, path="database.db"):
@@ -32,16 +33,21 @@ class DB:
             )
             self.conn.commit()
 
-    def get_user(self, user_id):
+    def get_user(self, user_id) -> Dict:
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
         row = self.cur.fetchone()
         if not row:
             return None
         user = dict(row)
-        user["upgrades"] = json.loads(user["upgrades"])
+        try:
+            user["upgrades"] = json.loads(user.get("upgrades") or "{}")
+        except Exception:
+            user["upgrades"] = {}
         return user
 
     def update_user(self, user_id, **kwargs):
+        if not kwargs:
+            return
         updates = []
         values = []
         for key, value in kwargs.items():
@@ -53,19 +59,18 @@ class DB:
         self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?", values)
         self.conn.commit()
 
-    def all_users(self):
+    def all_users(self) -> List[Dict]:
         self.cur.execute("SELECT * FROM users")
         rows = self.cur.fetchall()
         return [dict(row) for row in rows]
 
-    def get_all_users(self):
+    def get_all_users(self) -> List[Dict]:
         cur = self.conn.cursor()
         cur.execute("SELECT user_id, username FROM users")
         rows = cur.fetchall()
         return [{"user_id": r[0], "username": r[1]} for r in rows]
 
     def reset_user_progress(self, user_id: int):
-        """Сброс прогресса пользователя."""
         self.cur.execute("""
             UPDATE users
             SET bananas=0,
@@ -77,17 +82,22 @@ class DB:
         self.conn.commit()
 
     def add_gold_banana(self, user_id: int):
-        """Добавляет золотой банан пользователю."""
         user = self.get_user(user_id)
+        if not user:
+            return
         gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400
         self.update_user(user_id, gold_expires=gold_expires)
 
     def add_passive_clicks(self, user_id: int, amount: int = 2):
         user = self.get_user(user_id)
+        if not user:
+            return
         self.update_user(user_id, per_second=user.get("per_second", 0) + amount)
 
     def add_bananas(self, user_id: int, amount: int):
         user = self.get_user(user_id)
+        if not user:
+            return
         self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
 
     def close(self):

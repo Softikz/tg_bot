@@ -8,13 +8,12 @@ COSTS = {
     "gold": 1000
 }
 
-GOLD_DURATION = 60  # секунд
-
+# длительность золотого банана в секундах
+GOLD_DURATION = 60
 
 def cost_for_upgrade(kind: str, level: int) -> int:
-    base = COSTS[kind]
+    base = COSTS.get(kind, 100)
     return base * (level + 1)
-
 
 def apply_offline_gain(user: Dict) -> Tuple[int, float]:
     now = time.time()
@@ -26,14 +25,11 @@ def apply_offline_gain(user: Dict) -> Tuple[int, float]:
     added = per_second * elapsed
     return added, now
 
-
 def has_active_gold(user: Dict) -> bool:
     return user.get("gold_expires", 0) > time.time()
 
-
 def gold_multiplier(user: Dict) -> int:
     return 2 if has_active_gold(user) else 1
-
 
 def effective_per_click(user: Dict) -> int:
     return int(user.get("per_click", 1) * gold_multiplier(user))

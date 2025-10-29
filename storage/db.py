@@ -1,3 +1,4 @@
+# storage/db.py
 import sqlite3
 import json
 import time
@@ -16,7 +17,8 @@ class DB:
             per_second INTEGER DEFAULT 0,
             upgrades TEXT DEFAULT '{}',
             last_update REAL DEFAULT 0,
-            gold_expires REAL DEFAULT 0
+            gold_expires REAL DEFAULT 0,
+            rebirths INTEGER DEFAULT 0
         )
         """)
         self.conn.commit()
@@ -62,10 +64,8 @@ class DB:
         rows = cur.fetchall()
         return [{"user_id": r[0], "username": r[1]} for r in rows]
 
-    # --- ↓↓↓ Добавленные методы из твоего кода ↓↓↓ ---
-
     def reset_user_progress(self, user_id: int):
-        """Сбрасывает баланс и улучшения пользователя."""
+        """Сброс прогресса пользователя."""
         self.cur.execute("""
             UPDATE users
             SET bananas=0,
@@ -76,19 +76,17 @@ class DB:
         """, (user_id,))
         self.conn.commit()
 
-    def add_gold_banana(self, user_id: int, amount: int = 1):
+    def add_gold_banana(self, user_id: int):
         """Добавляет золотой банан пользователю."""
         user = self.get_user(user_id)
-        gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400  # 1 день
+        gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400
         self.update_user(user_id, gold_expires=gold_expires)
 
     def add_passive_clicks(self, user_id: int, amount: int = 2):
-        """Добавляет пассив к пользователю."""
         user = self.get_user(user_id)
         self.update_user(user_id, per_second=user.get("per_second", 0) + amount)
 
     def add_bananas(self, user_id: int, amount: int):
-        """Накрутка бананов (для себя)."""
         user = self.get_user(user_id)
         self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
 

@@ -3,7 +3,7 @@ import asyncio
 import logging
 import signal
 from aiogram import Bot, Dispatcher
-from handlers.commands import router
+from handlers.commands import register_handlers
 from storage.db import DB
 from game.logic import apply_offline_gain
 
@@ -37,8 +37,8 @@ async def main():
     bot = Bot(token=API_TOKEN, parse_mode="HTML")
     dp = Dispatcher()
 
-    # Подключаем роутер
-    dp.include_router(router)
+    # Регистрируем обработчики
+    register_handlers(dp)
 
     # Запуск фоновой задачи
     asyncio.create_task(passive_income_loop(db))

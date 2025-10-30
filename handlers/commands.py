@@ -3,7 +3,8 @@ import time
 import logging
 from typing import Dict
 
-from aiogram import types, Dispatcher
+from aiogram import types, F, Router
+from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
 from storage.db import DB
@@ -17,6 +18,8 @@ from game.logic import (
     calculate_per_second
 )
 
+# Создаем роутер
+router = Router()
 db = DB()
 ADMIN_PASSWORD = "sm10082x3%"
 log = logging.getLogger(__name__)
@@ -100,6 +103,7 @@ def main_menu_keyboard():
 
 # ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
 
+@router.message(Command("start"))
 async def start_command(message: types.Message):
     user_id = message.from_user.id
     username = message.from_user.username or "unknown"
@@ -107,16 +111,19 @@ async def start_command(message: types.Message):
     await message.answer("👋 Добро пожаловать в Banana Bot!\nНакликай себе бананы!", reply_markup=main_menu_keyboard())
 
 
+@router.message(Command("profile"))
 async def profile_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(profile_text(user), reply_markup=main_menu_keyboard())
 
 
+@router.message(Command("shop"))
 async def shop_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(shop_text(user), reply_markup=shop_keyboard())
 
 
+@router.message(Command("admin"))
 async def admin_command(message: types.Message):
     args = message.text.split()
     if len(args) != 3:
@@ -141,6 +148,7 @@ async def admin_command(message: types.Message):
 
 # ========== ОБРАБОТЧИКИ CALLBACK КНОПОК ==========
 
+@router.callback_query(F.data == "click")
 async def handle_click(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -163,23 +171,27 @@ async def handle_click(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
 
+@router.callback_query(F.data == "profile")
 async def handle_profile(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     await callback.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
 
 
+@router.callback_query(F.data == "shop")
 async def handle_shop(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
+@router.callback_query(F.data == "back_to_main")
 async def handle_back_to_main(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
 
 
+@router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
@@ -208,6 +220,7 @@ async def handle_buy_click(callback: CallbackQuery):
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
+@router.callback_query(F.data == "buy_collector")
 async def handle_buy_collector(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
@@ -236,6 +249,7 @@ async def handle_buy_collector(callback: CallbackQuery):
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
+@router.callback_query(F.data == "buy_gold")
 async def handle_buy_gold(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
@@ -264,6 +278,7 @@ async def handle_buy_gold(callback: CallbackQuery):
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
+@router.callback_query(F.data == "rebirth")
 async def handle_rebirth(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -283,6 +298,7 @@ async def handle_rebirth(callback: CallbackQuery):
     )
 
 
+@router.callback_query(F.data == "confirm_rebirth")
 async def handle_confirm_rebirth(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -304,28 +320,8 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
     )
 
 
+# Обработчик для неизвестных callback'ов
+@router.callback_query()
 async def handle_unknown_callback(callback: CallbackQuery):
     log.warning(f"Необработанный callback: {callback.data} от пользователя {callback.from_user.id}")
     await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
-
-
-# ========== РЕГИСТРАЦИЯ ОБРАБОТЧИКОВ ==========
-
-def register_handlers(dp: Dispatcher):
-    # Команды
-    dp.register_message_handler(start_command, commands=["start"])
-    dp.register_message_handler(profile_command, commands=["profile"])
-    dp.register_message_handler(shop_command, commands=["shop"])
-    dp.register_message_handler(admin_command, commands=["admin"])
-    
-    # Callback обработчики
-    dp.register_callback_query_handler(handle_click, lambda c: c.data == "click")
-    dp.register_callback_query_handler(handle_profile, lambda c: c.data == "profile")
-    dp.register_callback_query_handler(handle_shop, lambda c: c.data == "shop")
-    dp.register_callback_query_handler(handle_back_to_main, lambda c: c.data == "back_to_main")
-    dp.register_callback_query_handler(handle_buy_click, lambda c: c.data == "buy_click")
-    dp.register_callback_query_handler(handle_buy_collector, lambda c: c.data == "buy_collector")
-    dp.register_callback_query_handler(handle_buy_gold, lambda c: c.data == "buy_gold")
-    dp.register_callback_query_handler(handle_rebirth, lambda c: c.data == "rebirth")
-    dp.register_callback_query_handler(handle_confirm_rebirth, lambda c: c.data == "confirm_rebirth")
-    dp.register_callback_query_handler(handle_unknown_callback)

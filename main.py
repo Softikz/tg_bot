@@ -7,7 +7,7 @@ from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
-# <-- ВАЖНО: поставь сюда свой токен
+# Токен бота
 API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -37,13 +37,13 @@ async def main():
     bot = Bot(token=API_TOKEN, parse_mode="HTML")
     dp = Dispatcher()
 
-    # подключаем роутер (handlers/commands.py импортирует router)
+    # Подключаем роутер
     dp.include_router(router)
 
-    # запуск фоновой задачи
+    # Запуск фоновой задачи
     asyncio.create_task(passive_income_loop(db))
 
-    # обработка сигналов для корректной остановки
+    # Обработка сигналов для корректной остановки
     stop_event = asyncio.Event()
 
     def _signal_handler():

@@ -4,6 +4,7 @@ import logging
 import signal
 import os
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from handlers.commands import register_handlers
 from storage.db import DB
 from game.logic import apply_offline_gain
@@ -47,7 +48,9 @@ async def main():
     logger.info("=== ЗАПУСК БОТА ===")
 
     db = DB()
-    bot = Bot(token=API_TOKEN, parse_mode="HTML")
+    
+    # ИСПРАВЛЕННАЯ СТРОКА - новый синтаксис aiogram 3.7.0+
+    bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
 
     # Регистрируем обработчики
@@ -55,10 +58,8 @@ async def main():
     
     # Логируем зарегистрированные обработчики
     logger.info("Зарегистрированные обработчики:")
-    for handler in dp.message_handlers.handlers:
-        logger.info(f"Message handler: {handler}")
-    for handler in dp.callback_query_handlers.handlers:
-        logger.info(f"Callback handler: {handler}")
+    logger.info(f"Message handlers: {len(dp.message_handlers.handlers)}")
+    logger.info(f"Callback handlers: {len(dp.callback_query_handlers.handlers)}")
 
     # Запуск фоновой задачи
     asyncio.create_task(passive_income_loop(db))

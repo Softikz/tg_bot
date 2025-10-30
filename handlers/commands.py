@@ -4,7 +4,6 @@ from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import time
-import asyncio
 import logging
 from typing import Dict
 
@@ -49,7 +48,6 @@ def profile_text(user: Dict) -> str:
         text += f"✨ Золотой банан активен! ({remaining} сек)\n"
     text += f"🔁 Перерождений: {user.get('rebirths', 0)}\n"
     
-    # Показываем улучшения
     upgrades = user.get("upgrades", {})
     text += f"\n📊 Улучшения:\n"
     text += f"• Клик: уровень {upgrades.get('click', 0)}\n"
@@ -83,15 +81,10 @@ def shop_text(user: Dict) -> str:
     )
 
 
-def shop_keyboard(user: Dict):
-    upgrades = user.get("upgrades", {})
-    
-    click_level = upgrades.get("click", 0)
-    collector_level = upgrades.get("collector", 0)
-    
+def shop_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🖱 Улучшить клик (ур. {click_level})", callback_data="buy_click")],
-        [InlineKeyboardButton(text=f"⚙️ Улучшить сборщик (ур. {collector_level})", callback_data="buy_collector")],
+        [InlineKeyboardButton(text="🖱 Улучшить клик", callback_data="buy_click")],
+        [InlineKeyboardButton(text="⚙️ Улучшить сборщик", callback_data="buy_collector")],
         [InlineKeyboardButton(text="✨ Купить золотой банан", callback_data="buy_gold")],
         [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")],
         [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
@@ -107,7 +100,7 @@ def main_menu_keyboard():
     ])
 
 
-# === Команды ===
+# ========== ОБРАБОТЧИКИ СООБЩЕНИЙ ==========
 
 @router.message(Command("start"))
 async def start_command(message: types.Message):
@@ -115,6 +108,18 @@ async def start_command(message: types.Message):
     username = message.from_user.username or "unknown"
     ensure_and_update_offline(user_id, username)
     await message.answer("👋 Добро пожаловать в Banana Bot!\nНакликай себе бананы!", reply_markup=main_menu_keyboard())
+
+
+@router.message(Command("profile"))
+async def profile_command(message: types.Message):
+    user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
+    await message.answer(profile_text(user), reply_markup=main_menu_keyboard())
+
+
+@router.message(Command("shop"))
+async def shop_command(message: types.Message):
+    user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
+    await message.answer(shop_text(user), reply_markup=shop_keyboard())
 
 
 @router.message(Command("admin"))
@@ -140,31 +145,18 @@ async def admin_command(message: types.Message):
     await message.answer(f"✅ Добавлено {amount} 🍌\nБаланс: {user['bananas'] + amount} 🍌")
 
 
-@router.message(Command("profile"))
-async def profile_command(message: types.Message):
-    user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
-    await message.answer(profile_text(user), reply_markup=main_menu_keyboard())
-
-
-@router.message(Command("shop"))
-async def shop_command(message: types.Message):
-    user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
-    await message.answer(shop_text(user), reply_markup=shop_keyboard(user))
-
-
-# === Callback кнопки ===
+# ========== ОБРАБОТЧИКИ CALLBACK КНОПОК ==========
 
 @router.callback_query(F.data == "click")
-async def cb_click(query: CallbackQuery):
-    await query.answer()  # обязательно отвечаем на callback
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+async def handle_click(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     per_click = effective_per_click(user)
     
-    # Добавляем бананы за клик
     new_bananas = user['bananas'] + per_click
-    db.update_user(query.from_user.id, bananas=new_bananas, last_update=time.time())
+    db.update_user(callback.from_user.id, bananas=new_bananas, last_update=time.time())
     
-    user = db.get_user(query.from_user.id)
+    user = db.get_user(callback.from_user.id)
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
@@ -175,138 +167,147 @@ async def cb_click(query: CallbackQuery):
         remaining = int(user.get("gold_expires", 0) - time.time())
         text += f"✨ Активен Золотой Банан (2×) - {remaining} сек\n"
     
-    await query.message.edit_text(text, reply_markup=main_menu_keyboard())
-
-
-@router.callback_query(F.data == "shop")
-async def cb_shop(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
-    await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
+    await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
 
 @router.callback_query(F.data == "profile")
-async def cb_profile(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
-    await query.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
+async def handle_profile(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    await callback.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
+
+
+@router.callback_query(F.data == "shop")
+async def handle_shop(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
 @router.callback_query(F.data == "back_to_main")
-async def cb_back_to_main(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
-    await query.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
+async def handle_back_to_main(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    await callback.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
 
 
-@router.callback_query(F.data.in_({"buy_click", "buy_collector", "buy_gold"}))
-async def cb_buy_upgrade(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+@router.callback_query(F.data == "buy_click")
+async def handle_buy_click(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
-    kind = query.data.replace("buy_", "")
-    level = upgrades.get(kind, 0)
-
-    try:
-        cost = cost_for_upgrade(kind, level)
-    except Exception as e:
-        await query.answer(f"Ошибка расчёта стоимости: {e}", show_alert=True)
-        return
+    level = upgrades.get("click", 0)
+    cost = cost_for_upgrade("click", level)
 
     if user["bananas"] < cost:
-        await query.answer("❌ Недостаточно бананов!", show_alert=True)
+        await callback.answer("❌ Недостаточно бананов!", show_alert=True)
         return
 
-    # Вычитаем стоимость
     new_bananas = user["bananas"] - cost
     new_upgrades = upgrades.copy()
-    new_upgrades[kind] = level + 1
+    new_upgrades["click"] = level + 1
+    new_per_click = calculate_per_click(new_upgrades)
 
-    # Обновляем характеристики в зависимости от типа улучшения
-    if kind == "click":
-        new_per_click = calculate_per_click(new_upgrades)
-        db.update_user(
-            query.from_user.id, 
-            bananas=new_bananas, 
-            per_click=new_per_click, 
-            upgrades=new_upgrades
-        )
-        await query.answer(f"✅ Улучшение клика куплено! Теперь уровень {level + 1}", show_alert=True)
-        
-    elif kind == "collector":
-        new_per_second = calculate_per_second(new_upgrades)
-        db.update_user(
-            query.from_user.id, 
-            bananas=new_bananas, 
-            per_second=new_per_second, 
-            upgrades=new_upgrades
-        )
-        await query.answer(f"✅ Улучшение сборщика куплено! Теперь уровень {level + 1}", show_alert=True)
-        
-    elif kind == "gold":
-        # Активируем золотой банан
-        gold_expires = time.time() + GOLD_DURATION
-        db.update_user(
-            query.from_user.id, 
-            bananas=new_bananas, 
-            gold_expires=gold_expires, 
-            upgrades=new_upgrades
-        )
-        await query.answer(f"✅ Золотой банан активирован! +x2 к кликам на {GOLD_DURATION} секунд", show_alert=True)
-
-    # Обновляем сообщение магазина
-    user = db.get_user(query.from_user.id)
-    await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
+    db.update_user(
+        callback.from_user.id, 
+        bananas=new_bananas, 
+        per_click=new_per_click, 
+        upgrades=new_upgrades
+    )
+    
+    await callback.answer(f"✅ Улучшение клика куплено! Теперь уровень {level + 1}", show_alert=True)
+    
+    user = db.get_user(callback.from_user.id)
+    await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 
-# --- Перерождение (rebirth) ---
-REQUIREMENTS = [
-    {"bananas": 500, "gold": 0},
-    {"bananas": 1000, "gold": 1},
-]
+@router.callback_query(F.data == "buy_collector")
+async def handle_buy_collector(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    upgrades = user.get("upgrades", {}) or {}
+    level = upgrades.get("collector", 0)
+    cost = cost_for_upgrade("collector", level)
+
+    if user["bananas"] < cost:
+        await callback.answer("❌ Недостаточно бананов!", show_alert=True)
+        return
+
+    new_bananas = user["bananas"] - cost
+    new_upgrades = upgrades.copy()
+    new_upgrades["collector"] = level + 1
+    new_per_second = calculate_per_second(new_upgrades)
+
+    db.update_user(
+        callback.from_user.id, 
+        bananas=new_bananas, 
+        per_second=new_per_second, 
+        upgrades=new_upgrades
+    )
+    
+    await callback.answer(f"✅ Улучшение сборщика куплено! Теперь уровень {level + 1}", show_alert=True)
+    
+    user = db.get_user(callback.from_user.id)
+    await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
+
+
+@router.callback_query(F.data == "buy_gold")
+async def handle_buy_gold(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    upgrades = user.get("upgrades", {}) or {}
+    level = upgrades.get("gold", 0)
+    cost = cost_for_upgrade("gold", level)
+
+    if user["bananas"] < cost:
+        await callback.answer("❌ Недостаточно бананов!", show_alert=True)
+        return
+
+    new_bananas = user["bananas"] - cost
+    new_upgrades = upgrades.copy()
+    new_upgrades["gold"] = level + 1
+    
+    gold_expires = time.time() + GOLD_DURATION
+    db.update_user(
+        callback.from_user.id, 
+        bananas=new_bananas, 
+        gold_expires=gold_expires, 
+        upgrades=new_upgrades
+    )
+    
+    await callback.answer(f"✅ Золотой банан активирован! +x2 к кликам на {GOLD_DURATION} секунд", show_alert=True)
+    
+    user = db.get_user(callback.from_user.id)
+    await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
+
 
 @router.callback_query(F.data == "rebirth")
-async def rebirth_prompt(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+async def handle_rebirth(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
-    req = REQUIREMENTS[min(rebirth_count, len(REQUIREMENTS)-1)]
-    collected = user["bananas"]
-    total_needed = req["bananas"]
-    progress_percent = min(100, int(collected / total_needed * 100)) if total_needed > 0 else 100
-    filled = int(progress_percent / 10)
-    empty = 10 - filled
-    bar = "🟩"*filled + "⬜"*empty
-
+    
     builder = InlineKeyboardBuilder()
     builder.button(text="🔄 Переродиться", callback_data="confirm_rebirth")
     builder.button(text="⬅ Назад", callback_data="back_to_main")
 
-    await query.message.edit_text(
+    await callback.message.edit_text(
         f"🔁 Перерождение\n\n"
         f"Текущий уровень: {rebirth_count}\n"
-        f"Собрано бананов: {int(collected)}/{total_needed}\n"
-        f"{bar} {progress_percent}%\n\n"
-        f"Требуется золотых бананов: {req.get('gold',0)}\n\n"
-        f"⚠️ При перерождении весь прогресс сбрасывается, но вы получаете бонусы!",
+        f"Собрано бананов: {int(user['bananas'])}\n\n"
+        f"⚠️ При перерождении весь прогресс сбрасывается!",
         reply_markup=builder.as_markup()
     )
 
 
 @router.callback_query(F.data == "confirm_rebirth")
-async def confirm_rebirth(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+async def handle_confirm_rebirth(callback: CallbackQuery):
+    await callback.answer()
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
-    req = REQUIREMENTS[min(rebirth_count, len(REQUIREMENTS)-1)]
 
-    if user["bananas"] < req["bananas"] or user.get("upgrades", {}).get("gold", 0) < req.get("gold", 0):
-        await query.answer("⚠️ Недостаточно бананов или золотых бананов для перерождения.", show_alert=True)
-        return
-
-    # Сбрасываем прогресс, но увеличиваем счетчик перерождений
     db.update_user(
-        query.from_user.id, 
+        callback.from_user.id, 
         bananas=0, 
         per_click=1, 
         per_second=0, 
@@ -314,24 +315,15 @@ async def confirm_rebirth(query: CallbackQuery):
         rebirths=rebirth_count + 1
     )
 
-    await query.message.edit_text(
+    await callback.message.edit_text(
         f"🌟 Вы переродились! Уровень перерождения: {rebirth_count + 1}\n\n"
         f"Прогресс сброшен, но вы стали сильнее!",
         reply_markup=main_menu_keyboard()
     )
 
 
-# === DEBUG: ловим все неизвестные callback'и ===
+# Обработчик для отладки необработанных callback'ов
 @router.callback_query()
-async def _debug_unhandled_callback(query: CallbackQuery):
-    try:
-        await query.answer()  # отвечаем, чтобы спиннер исчез
-    except Exception:
-        pass
-    log.info("⚠️ Unhandled callback_query received. from=%s data=%s message_id=%s",
-             query.from_user.id, query.data, getattr(query.message, "message_id", None))
-
-
-@router.message()
-async def _debug_unhandled_message(message: types.Message):
-    log.info("⚠️ Unhandled message: from=%s text=%s", message.from_user.id, message.text)
+async def handle_unknown_callback(callback: CallbackQuery):
+    log.warning(f"Необработанный callback: {callback.data} от пользователя {callback.from_user.id}")
+    await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)

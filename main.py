@@ -5,7 +5,7 @@ import signal
 import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from handlers.commands import register_handlers
+from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
@@ -33,35 +33,16 @@ async def passive_income_loop(db: DB, interval: int = 1):
 async def main():
     logger.info("🚀 Бот запускается...")
     
-    # Логируем информацию о версии и файлах
-    logger.info("=== СИСТЕМНАЯ ИНФОРМАЦИЯ ===")
-    logger.info(f"Текущая директория: {os.getcwd()}")
-    logger.info("Содержимое директории:")
-    for file in os.listdir():
-        logger.info(f"  - {file}")
-    
-    if os.path.exists("handlers"):
-        logger.info("Содержимое handlers:")
-        for file in os.listdir("handlers"):
-            logger.info(f"  - {file}")
-    
-    logger.info("=== ЗАПУСК БОТА ===")
-
     db = DB()
     
-    # ИСПРАВЛЕННАЯ СТРОКА - новый синтаксис aiogram 3.7.0+
     bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
 
-    # Регистрируем обработчики
-    register_handlers(dp)
+    # Подключаем роутер
+    dp.include_router(router)
     
-    # Логируем зарегистрированные обработчики
-    logger.info("Зарегистрированные обработчики:")
-    logger.info(f"Message handlers: {len(dp.message_handlers.handlers)}")
-    logger.info(f"Callback handlers: {len(dp.callback_query_handlers.handlers)}")
+    logger.info(f"Бот запущен. Роутер подключен.")
 
-    # Запуск фоновой задачи
     asyncio.create_task(passive_income_loop(db))
 
     try:

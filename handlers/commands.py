@@ -64,7 +64,7 @@ def shop_keyboard(user: Dict):
         [InlineKeyboardButton(text="⚙️ Улучшить сборщик", callback_data="buy_collector")],
         [InlineKeyboardButton(text="✨ Купить золотой банан", callback_data="buy_gold")],
         [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")],
-        [InlineKeyboardButton(text="⬅ Назад", callback_data="profile")]
+        [InlineKeyboardButton(text="⬅ Назад", callback_data="back_to_profile")]  # ИСПРАВЛЕНО: изменен callback_data
     ])
 
 
@@ -148,6 +148,22 @@ async def cb_shop(query: CallbackQuery):
     await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
 
 
+# ДОБАВЛЕНО: Обработчик для кнопки "Назад" из магазина в профиль
+@router.callback_query(F.data == "back_to_profile")
+async def cb_back_to_profile(query: CallbackQuery):
+    await query.answer()
+    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+    await query.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
+
+
+# ДОБАВЛЕНО: Обработчик для кнопки "profile" (если она есть где-то еще)
+@router.callback_query(F.data == "profile")
+async def cb_profile(query: CallbackQuery):
+    await query.answer()
+    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+    await query.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
+
+
 @router.callback_query(F.data.in_({"buy_click", "buy_collector", "buy_gold"}))
 async def cb_buy_upgrade(query: CallbackQuery):
     await query.answer()
@@ -203,7 +219,7 @@ async def rebirth_prompt(query: CallbackQuery):
 
     builder = InlineKeyboardBuilder()
     builder.button(text="Переродиться", callback_data="confirm_rebirth")
-    builder.button(text="⬅ Назад", callback_data="profile")
+    builder.button(text="⬅ Назад", callback_data="back_to_profile")  # ИСПРАВЛЕНО: изменен callback_data
 
     await query.message.edit_text(
         f"🔁 Перерождение\n\n"
@@ -244,7 +260,6 @@ async def _debug_unhandled_callback(query: CallbackQuery):
         pass
     log.info("⚠️ Unhandled callback_query received. from=%s data=%s message_id=%s",
              query.from_user.id, query.data, getattr(query.message, "message_id", None))
-    # не делаем show_alert по умолчанию, просто логируем
 
 
 @router.message()

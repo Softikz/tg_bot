@@ -14,7 +14,9 @@ from game.logic import (
     cost_for_upgrade,
     effective_per_click,
     GOLD_DURATION,
-    has_active_gold
+    has_active_gold,
+    calculate_per_click,
+    calculate_per_second
 )
 
 router = Router()
@@ -38,41 +40,70 @@ def ensure_and_update_offline(user_id: int, username: str):
 def profile_text(user: Dict) -> str:
     text = (
         f"👤 Профиль @{user['username']}\n\n"
-        f"🍌 Бананы: {user['bananas']}\n"
-        f"🖱 За клик: {user['per_click']}\n"
+        f"🍌 Бананы: {int(user['bananas'])}\n"
+        f"🖱 За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
         f"⚙️ Пассивно: {user['per_second']} / сек\n"
     )
     if has_active_gold(user):
-        text += "✨ Золотой банан активен!\n"
+        remaining = int(user.get("gold_expires", 0) - time.time())
+        text += f"✨ Золотой банан активен! ({remaining} сек)\n"
     text += f"🔁 Перерождений: {user.get('rebirths', 0)}\n"
+    
+    # Показываем улучшения
+    upgrades = user.get("upgrades", {})
+    text += f"\n📊 Улучшения:\n"
+    text += f"• Клик: уровень {upgrades.get('click', 0)}\n"
+    text += f"• Сборщик: уровень {upgrades.get('collector', 0)}\n"
+    text += f"• Золотых бананов куплено: {upgrades.get('gold', 0)}\n"
+    
     return text
 
 
 def shop_text(user: Dict) -> str:
+    upgrades = user.get("upgrades", {})
+    
+    click_level = upgrades.get("click", 0)
+    collector_level = upgrades.get("collector", 0)
+    gold_level = upgrades.get("gold", 0)
+    
+    click_cost = cost_for_upgrade("click", click_level)
+    collector_cost = cost_for_upgrade("collector", collector_level)
+    gold_cost = cost_for_upgrade("gold", gold_level)
+    
     return (
         f"🛒 Магазин улучшений\n\n"
-        f"💰 Баланс: {user['bananas']} 🍌\n"
-        f"1️⃣ Улучшить клик (+1) — {cost_for_upgrade('click', user['upgrades'].get('click', 0))} 🍌\n"
-        f"2️⃣ Улучшить пассив (+1/сек) — {cost_for_upgrade('collector', user['upgrades'].get('collector', 0))} 🍌\n"
-        f"3️⃣ Купить Золотой Банан ✨ — {cost_for_upgrade('gold', user['upgrades'].get('gold', 0))} 🍌\n"
+        f"💰 Баланс: {int(user['bananas'])} 🍌\n\n"
+        f"1️⃣ Улучшить клик (уровень {click_level}) → +1 банан за клик\n"
+        f"💵 Стоимость: {click_cost} 🍌\n\n"
+        f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
+        f"💵 Стоимость: {collector_cost} 🍌\n\n"
+        f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level})\n"
+        f"💵 Стоимость: {gold_cost} 🍌\n"
+        f"⚡ Эффект: x2 к кликам на {GOLD_DURATION} секунд\n"
     )
 
 
 def shop_keyboard(user: Dict):
+    upgrades = user.get("upgrades", {})
+    
+    click_level = upgrades.get("click", 0)
+    collector_level = upgrades.get("collector", 0)
+    
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🖱 Улучшить клик", callback_data="buy_click")],
-        [InlineKeyboardButton(text="⚙️ Улучшить сборщик", callback_data="buy_collector")],
+        [InlineKeyboardButton(text=f"🖱 Улучшить клик (ур. {click_level})", callback_data="buy_click")],
+        [InlineKeyboardButton(text=f"⚙️ Улучшить сборщик (ур. {collector_level})", callback_data="buy_collector")],
         [InlineKeyboardButton(text="✨ Купить золотой банан", callback_data="buy_gold")],
         [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")],
-        [InlineKeyboardButton(text="⬅ Назад", callback_data="back_to_profile")]  # ИСПРАВЛЕНО: изменен callback_data
+        [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
     ])
 
 
 def main_menu_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🍌 Кликнуть", callback_data="click"),
-         InlineKeyboardButton(text="🛒 Магазин", callback_data="shop")],
-        [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")]
+         InlineKeyboardButton(text="👤 Профиль", callback_data="profile")],
+        [InlineKeyboardButton(text="🛒 Магазин", callback_data="shop"),
+         InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")]
     ])
 
 
@@ -128,16 +159,22 @@ async def cb_click(query: CallbackQuery):
     await query.answer()  # обязательно отвечаем на callback
     user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
     per_click = effective_per_click(user)
-    db.update_user(query.from_user.id, bananas=user['bananas'] + per_click, last_update=time.time())
+    
+    # Добавляем бананы за клик
+    new_bananas = user['bananas'] + per_click
+    db.update_user(query.from_user.id, bananas=new_bananas, last_update=time.time())
+    
     user = db.get_user(query.from_user.id)
     text = (
         f"🍌 Клик! +{per_click}\n\n"
-        f"Всего: {user['bananas']} 🍌\n"
-        f"За клик: {user['per_click']}\n"
+        f"Всего: {int(user['bananas'])} 🍌\n"
+        f"За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
         f"Пассив: {user['per_second']}/сек\n"
     )
     if has_active_gold(user):
-        text += "✨ Активен Золотой Банан (2×)\n"
+        remaining = int(user.get("gold_expires", 0) - time.time())
+        text += f"✨ Активен Золотой Банан (2×) - {remaining} сек\n"
+    
     await query.message.edit_text(text, reply_markup=main_menu_keyboard())
 
 
@@ -148,20 +185,18 @@ async def cb_shop(query: CallbackQuery):
     await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
 
 
-# ДОБАВЛЕНО: Обработчик для кнопки "Назад" из магазина в профиль
-@router.callback_query(F.data == "back_to_profile")
-async def cb_back_to_profile(query: CallbackQuery):
-    await query.answer()
-    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
-    await query.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
-
-
-# ДОБАВЛЕНО: Обработчик для кнопки "profile" (если она есть где-то еще)
 @router.callback_query(F.data == "profile")
 async def cb_profile(query: CallbackQuery):
     await query.answer()
     user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
     await query.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
+
+
+@router.callback_query(F.data == "back_to_main")
+async def cb_back_to_main(query: CallbackQuery):
+    await query.answer()
+    user = ensure_and_update_offline(query.from_user.id, query.from_user.username)
+    await query.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
 
 
 @router.callback_query(F.data.in_({"buy_click", "buy_collector", "buy_gold"}))
@@ -174,25 +209,52 @@ async def cb_buy_upgrade(query: CallbackQuery):
 
     try:
         cost = cost_for_upgrade(kind, level)
-    except Exception:
-        await query.answer("Ошибка расчёта стоимости.", show_alert=True)
+    except Exception as e:
+        await query.answer(f"Ошибка расчёта стоимости: {e}", show_alert=True)
         return
 
     if user["bananas"] < cost:
         await query.answer("❌ Недостаточно бананов!", show_alert=True)
         return
 
+    # Вычитаем стоимость
     new_bananas = user["bananas"] - cost
     new_upgrades = upgrades.copy()
     new_upgrades[kind] = level + 1
 
+    # Обновляем характеристики в зависимости от типа улучшения
     if kind == "click":
-        db.update_user(query.from_user.id, bananas=new_bananas, per_click=user["per_click"] + 1, upgrades=new_upgrades)
+        new_per_click = calculate_per_click(new_upgrades)
+        db.update_user(
+            query.from_user.id, 
+            bananas=new_bananas, 
+            per_click=new_per_click, 
+            upgrades=new_upgrades
+        )
+        await query.answer(f"✅ Улучшение клика куплено! Теперь уровень {level + 1}", show_alert=True)
+        
     elif kind == "collector":
-        db.update_user(query.from_user.id, bananas=new_bananas, per_second=user["per_second"] + 1, upgrades=new_upgrades)
+        new_per_second = calculate_per_second(new_upgrades)
+        db.update_user(
+            query.from_user.id, 
+            bananas=new_bananas, 
+            per_second=new_per_second, 
+            upgrades=new_upgrades
+        )
+        await query.answer(f"✅ Улучшение сборщика куплено! Теперь уровень {level + 1}", show_alert=True)
+        
     elif kind == "gold":
-        db.update_user(query.from_user.id, bananas=new_bananas, gold_expires=time.time() + GOLD_DURATION, upgrades=new_upgrades)
+        # Активируем золотой банан
+        gold_expires = time.time() + GOLD_DURATION
+        db.update_user(
+            query.from_user.id, 
+            bananas=new_bananas, 
+            gold_expires=gold_expires, 
+            upgrades=new_upgrades
+        )
+        await query.answer(f"✅ Золотой банан активирован! +x2 к кликам на {GOLD_DURATION} секунд", show_alert=True)
 
+    # Обновляем сообщение магазина
     user = db.get_user(query.from_user.id)
     await query.message.edit_text(shop_text(user), reply_markup=shop_keyboard(user))
 
@@ -201,7 +263,6 @@ async def cb_buy_upgrade(query: CallbackQuery):
 REQUIREMENTS = [
     {"bananas": 500, "gold": 0},
     {"bananas": 1000, "gold": 1},
-    # можно расширить
 ]
 
 @router.callback_query(F.data == "rebirth")
@@ -218,14 +279,16 @@ async def rebirth_prompt(query: CallbackQuery):
     bar = "🟩"*filled + "⬜"*empty
 
     builder = InlineKeyboardBuilder()
-    builder.button(text="Переродиться", callback_data="confirm_rebirth")
-    builder.button(text="⬅ Назад", callback_data="back_to_profile")  # ИСПРАВЛЕНО: изменен callback_data
+    builder.button(text="🔄 Переродиться", callback_data="confirm_rebirth")
+    builder.button(text="⬅ Назад", callback_data="back_to_main")
 
     await query.message.edit_text(
         f"🔁 Перерождение\n\n"
-        f"Всего бананов собрано: {collected}/{total_needed}\n"
+        f"Текущий уровень: {rebirth_count}\n"
+        f"Собрано бананов: {int(collected)}/{total_needed}\n"
         f"{bar} {progress_percent}%\n\n"
-        f"Требуется золотых бананов: {req.get('gold',0)}",
+        f"Требуется золотых бананов: {req.get('gold',0)}\n\n"
+        f"⚠️ При перерождении весь прогресс сбрасывается, но вы получаете бонусы!",
         reply_markup=builder.as_markup()
     )
 
@@ -238,20 +301,27 @@ async def confirm_rebirth(query: CallbackQuery):
     req = REQUIREMENTS[min(rebirth_count, len(REQUIREMENTS)-1)]
 
     if user["bananas"] < req["bananas"] or user.get("upgrades", {}).get("gold", 0) < req.get("gold", 0):
-        await query.message.answer("⚠️ Недостаточно бананов или золотых бананов для перерождения.")
+        await query.answer("⚠️ Недостаточно бананов или золотых бананов для перерождения.", show_alert=True)
         return
 
-    new_upgrades = user.get("upgrades", {}).copy()
-    if req.get("gold", 0) > 0:
-        new_upgrades["gold"] = max(0, new_upgrades.get("gold", 0) - req["gold"])
+    # Сбрасываем прогресс, но увеличиваем счетчик перерождений
+    db.update_user(
+        query.from_user.id, 
+        bananas=0, 
+        per_click=1, 
+        per_second=0, 
+        upgrades={},
+        rebirths=rebirth_count + 1
+    )
 
-    db.update_user(query.from_user.id, bananas=0, per_click=1, per_second=0, upgrades=new_upgrades)
-    db.update_user(query.from_user.id, rebirths=rebirth_count + 1)
+    await query.message.edit_text(
+        f"🌟 Вы переродились! Уровень перерождения: {rebirth_count + 1}\n\n"
+        f"Прогресс сброшен, но вы стали сильнее!",
+        reply_markup=main_menu_keyboard()
+    )
 
-    await query.message.answer("🌟 Вы переродились! Прогресс сброшен.")
 
-
-# === DEBUG: ловим все неизвестные callback'и и сообщения ===
+# === DEBUG: ловим все неизвестные callback'и ===
 @router.callback_query()
 async def _debug_unhandled_callback(query: CallbackQuery):
     try:

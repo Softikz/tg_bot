@@ -3,31 +3,43 @@ import time
 from typing import Dict, Tuple
 
 # Базовые стоимости улучшений
-CLICK_BASE_COST = 50  # Начальная цена улучшения клика
+CLICK_BASE_COST = 50
 
 # Длительность золотого банана в секундах
 GOLD_DURATION = 300  # 5 минут
 
+# Требования для перерождения
+def get_rebirth_requirement(rebirth_count: int) -> int:
+    """Получить требование бананов для перерождения"""
+    if rebirth_count == 0:
+        return 1000
+    elif rebirth_count == 1:
+        return 2000
+    elif rebirth_count == 2:
+        return 4000
+    else:
+        # Экспоненциальный рост: 1000, 2000, 4000, 8000, 16000...
+        return 1000 * (2 ** rebirth_count)
+
+def get_rebirth_reward(rebirth_count: int) -> str:
+    """Получить награду за перерождение"""
+    rewards = [
+        "🎁 +1 Золотой Банан в инвентарь",
+        "🎁 +2 Золотых Банана в инвентарь", 
+        "🎁 +3 Золотых Банана + 🚀 Умножение кликов x1.5",
+        "🎁 +5 Золотых Бананов + 🚀 Умножение кликов x2",
+        "🎁 +8 Золотых Бананов + 🚀 Умножение кликов x3"
+    ]
+    return rewards[min(rebirth_count, len(rewards)-1)]
+
 def cost_for_upgrade(kind: str, level: int) -> int:
-    """Рассчитать стоимость улучшения с новой прогрессией"""
     if kind == "click":
-        # Новая прогрессия: 
-        # Уровень 0 → 1: 50
-        # Уровень 1 → 2: 200 (50 + 150)
-        # Уровень 2 → 3: 300 (200 + 100) 
-        # Уровень 3 → 4: 450 (300 + 150)
-        # Уровень 4 → 5: 650 (450 + 200)
-        # Уровень 5 → 6: 900 (650 + 250)
-        # и т.д.
-        
         if level == 0:
-            return CLICK_BASE_COST  # 50 для первого улучшения
+            return CLICK_BASE_COST
         else:
-            # Для уровней >=1: предыдущая_цена + 150 + 50*(level-1)
             prev_cost = cost_for_upgrade("click", level-1)
             increase = 150 + 50 * (level - 1)
             return prev_cost + increase
-            
     elif kind == "collector":
         return 100 * (level + 1) * 2
     elif kind == "gold":
@@ -36,7 +48,6 @@ def cost_for_upgrade(kind: str, level: int) -> int:
         return 100 * (level + 1) * 2
 
 def apply_offline_gain(user: Dict) -> Tuple[int, float]:
-    """Применить оффлайн заработок"""
     now = time.time()
     last = user.get("last_update", now)
     elapsed = int(now - last)
@@ -48,48 +59,39 @@ def apply_offline_gain(user: Dict) -> Tuple[int, float]:
     return added, now
 
 def has_active_gold(user: Dict) -> bool:
-    """Проверить активен ли золотой банан"""
     return user.get("gold_expires", 0) > time.time()
 
 def has_active_event(user: Dict) -> bool:
-    """Проверить активен ли ивент"""
     return user.get("event_expires", 0) > time.time()
 
 def get_event_multiplier(user: Dict) -> float:
-    """Получить множитель активного ивента"""
     if has_active_event(user):
         return user.get("event_multiplier", 1.0)
     return 1.0
 
 def gold_multiplier(user: Dict) -> int:
-    """Множитель золотого банана"""
     return 2 if has_active_gold(user) else 1
 
 def effective_per_click(user: Dict) -> int:
-    """Эффективные клики с учетом золотого банана и ивентов"""
     base_click = user.get("per_click", 1)
     event_multiplier = get_event_multiplier(user)
-    return int(base_click * gold_multiplier(user) * event_multiplier)
+    rebirth_multiplier = 1.0 + (user.get("rebirths", 0) * 0.5)  # +0.5 за каждое перерождение
+    return int(base_click * gold_multiplier(user) * event_multiplier * rebirth_multiplier)
 
 def calculate_per_click(upgrades: Dict) -> int:
-    """Рассчитать силу клика на основе улучшений"""
     click_level = upgrades.get("click", 0)
-    # Каждое улучшение клика дает +1 к базовому урону
     return 1 + click_level
 
 def calculate_per_second(upgrades: Dict) -> int:
-    """Рассчитать пассивный доход на основе улучшений"""
     collector_level = upgrades.get("collector", 0)
-    # Каждое улучшение сборщика дает +1 банан в секунду
     return collector_level
 
 def parse_event_duration(duration_str: str) -> int:
-    """Парсинг длительности ивента из формата 'часы:минуты' в секунды"""
     try:
         if ':' in duration_str:
             hours, minutes = map(int, duration_str.split(':'))
             return hours * 3600 + minutes * 60
         else:
-            return int(duration_str) * 3600  # если только число - считаем как часы
+            return int(duration_str) * 3600
     except (ValueError, AttributeError):
-        raise ValueError("Неверный формат длительности. Используйте 'часы:минуты' (например: '1:30' или '0:45')")
+        raise ValueError("Неверный формат длительности. Используйте 'часы:минуты'")

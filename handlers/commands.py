@@ -173,6 +173,83 @@ async def inventory_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(inventory_text(user), reply_markup=inventory_keyboard(user))
 
+@router.message(Command("admin"))
+async def admin_command(message: types.Message):
+    args = message.text.split()
+    if len(args) != 3:
+        await message.answer("⚠️ Использование: /admin <пароль> <кол-во бананов>")
+        return
+
+    _, password, amount = args
+    if password != ADMIN_PASSWORD:
+        await message.answer("❌ Неверный пароль.")
+        return
+
+    try:
+        amount = int(amount)
+    except ValueError:
+        await message.answer("⚠️ Количество должно быть числом.")
+        return
+
+    user = db.get_user(message.from_user.id)
+    db.update_user(message.from_user.id, bananas=user["bananas"] + amount)
+    await message.answer(f"✅ Добавлено {amount} 🍌\nБаланс: {user['bananas'] + amount} 🍌")
+
+@router.message(Command("event"))
+async def event_command(message: types.Message):
+    """Админская команда для запуска ивентов"""
+    args = message.text.split()
+    if len(args) != 4:
+        await message.answer(
+            "⚠️ Использование: /event <пароль> <тип_ивента> <длительность>\n\n"
+            "Примеры:\n"
+            "/event sm10082x3% clickx5 1:30 - клики x5 на 1.5 часа\n"
+            "/event sm10082x3% clickx3 0:45 - клики x3 на 45 минут\n"
+            "/event sm10082x3% incomex2 2:00 - доход x2 на 2 часа"
+        )
+        return
+
+    _, password, event_type, duration_str = args
+    
+    # Проверка пароля
+    if password != ADMIN_PASSWORD:
+        await message.answer("❌ Неверный пароль.")
+        return
+
+    try:
+        # Парсинг длительности
+        duration_seconds = parse_event_duration(duration_str)
+        
+        # Парсинг типа ивента и множителя
+        if 'x' in event_type:
+            event_name, multiplier_str = event_type.split('x')
+            multiplier = float(multiplier_str)
+        else:
+            event_name = event_type
+            multiplier = 2.0  # значение по умолчанию
+        
+        # Запускаем ивент для всех пользователей
+        db.start_event_for_all_users(event_type, multiplier, duration_seconds)
+        
+        # Форматируем время для ответа
+        hours = duration_seconds // 3600
+        minutes = (duration_seconds % 3600) // 60
+        
+        time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes}м"
+        
+        await message.answer(
+            f"🎉 Ивент запущен!\n\n"
+            f"📊 Тип: {event_type}\n"
+            f"⚡ Множитель: {multiplier}×\n"
+            f"⏰ Длительность: {time_str}\n\n"
+            f"Ивент автоматически завершится через указанное время."
+        )
+        
+    except ValueError as e:
+        await message.answer(f"❌ Ошибка: {e}")
+    except Exception as e:
+        await message.answer(f"❌ Неизвестная ошибка: {e}")
+
 # ========== CALLBACK ОБРАБОТЧИКИ ==========
 
 @router.callback_query(F.data == "click")
@@ -252,7 +329,7 @@ async def handle_use_gold_banana(callback: CallbackQuery):
     else:
         await callback.answer("❌ Нет золотых бананов в инвентаре!", show_alert=True)
 
-# Покупки улучшений (оставить без изменений)
+# Покупки улучшений
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -347,97 +424,4 @@ async def handle_rebirth(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
-    current_bananas = user["bananas"]
-    requirement = get_rebirth_requirement(rebirth_count)
-    
-    progress_bar = create_progress_bar(current_bananas, requirement)
-    reward = get_rebirth_reward(rebirth_count)
-    
-    text = (
-        f"🌌 Перерождение\n\n"
-        f"🔁 Перерождений всего: {rebirth_count}\n"
-        f"🍌 Твои бананы: {current_bananas}/{requirement}\n"
-        f"{progress_bar}\n\n"
-        f"🎁 Награда за перерождение:\n{reward}\n\n"
-        f"⚠️ При перерождении весь прогресс сбрасывается!"
-    )
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    
-    if current_bananas >= requirement:
-        keyboard.inline_keyboard.append([InlineKeyboardButton(text="🚀 ПЕРЕРОДИТЬСЯ", callback_data="confirm_rebirth")])
-    
-    keyboard.inline_keyboard.append([InlineKeyboardButton(text="⬅ Назад", callback_data="back_to_main")])
-    
-    await callback.message.edit_text(text, reply_markup=keyboard)
-
-@router.callback_query(F.data == "confirm_rebirth")
-async def handle_confirm_rebirth(callback: CallbackQuery):
-    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
-    rebirth_count = user.get("rebirths", 0)
-    requirement = get_rebirth_requirement(rebirth_count)
-    
-    if user["bananas"] < requirement:
-        await callback.answer("❌ Недостаточно бананов для перерождения!", show_alert=True)
-        return
-    
-    # Анимация перерождения
-    animation_messages = [
-        "🌠 Запускаем перерождение...",
-        "💫 Собираем звёздную пыль...",
-        "☄️ Призываем метеориты...",
-        "🌟 Поглощаем энергию вселенной...",
-        "🚀 ПЕРЕРОЖДЕНИЕ!"
-    ]
-    
-    for i, message in enumerate(animation_messages):
-        stars = "✨" * (i + 1)
-        meteors = "☄️" * (i + 1)
-        await callback.message.edit_text(f"{stars}\n{message}\n{meteors}")
-        await asyncio.sleep(1)
-    
-    # Награды за перерождение
-    rewards = {
-        0: {"gold_banana": 1},
-        1: {"gold_banana": 2},
-        2: {"gold_banana": 3},
-        3: {"gold_banana": 5},
-        4: {"gold_banana": 8}
-    }
-    
-    reward = rewards.get(rebirth_count, {"gold_banana": 10})
-    
-    # Добавляем награды в инвентарь
-    inventory = user.get("inventory", {})
-    for item, quantity in reward.items():
-        inventory[item] = inventory.get(item, 0) + quantity
-    
-    # Сбрасываем прогресс и увеличиваем счетчик перерождений
-    db.update_user(
-        callback.from_user.id, 
-        bananas=0, 
-        per_click=1, 
-        per_second=0, 
-        upgrades={},
-        rebirths=rebirth_count + 1,
-        inventory=inventory
-    )
-    
-    # Финальное сообщение
-    reward_text = ""
-    for item, quantity in reward.items():
-        if item == "gold_banana":
-            reward_text += f"✨ Золотых Бананов: +{quantity}\n"
-    
-    await callback.message.edit_text(
-        f"🎉 Перерождение завершено!\n\n"
-        f"🔁 Уровень перерождения: {rebirth_count + 1}\n\n"
-        f"🎁 Полученные награды:\n{reward_text}\n"
-        f"💫 Ты стал сильнее! Прогресс сброшен, но награды остались с тобой!",
-        reply_markup=main_menu_keyboard()
-    )
-
-# Обработчик для неизвестных callback'ов
-@router.callback_query()
-async def handle_unknown_callback(callback: CallbackQuery):
-    await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
+   

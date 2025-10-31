@@ -95,3 +95,4 @@ def parse_event_duration(duration_str: str) -> int:
             return int(duration_str) * 3600
     except (ValueError, AttributeError):
         raise ValueError("Неверный формат длительности. Используйте 'часы:минуты'")
+

@@ -2,13 +2,14 @@
 import sqlite3
 import json
 import time
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 class DB:
     def __init__(self, path="database.db"):
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
+
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -22,8 +23,19 @@ class DB:
             rebirths INTEGER DEFAULT 0
         )
         """)
+
+        self.cur.execute("""
+        CREATE TABLE IF NOT EXISTS events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT,
+            multiplier REAL,
+            expires REAL
+        )
+        """)
+
         self.conn.commit()
 
+    # ======== USERS ========
     def create_user_if_not_exists(self, user_id, username):
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
         if not self.cur.fetchone():
@@ -33,7 +45,7 @@ class DB:
             )
             self.conn.commit()
 
-    def get_user(self, user_id) -> Dict:
+    def get_user(self, user_id) -> Optional[Dict]:
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
         row = self.cur.fetchone()
         if not row:
@@ -48,57 +60,41 @@ class DB:
     def update_user(self, user_id, **kwargs):
         if not kwargs:
             return
-        updates = []
-        values = []
+        updates, values = [], []
         for key, value in kwargs.items():
             if key == "upgrades":
                 value = json.dumps(value)
-            updates.append(f"{key} = ?")
+            updates.append(f"{key}=?")
             values.append(value)
         values.append(user_id)
-        self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?", values)
+        self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id=?", values)
         self.conn.commit()
 
     def all_users(self) -> List[Dict]:
         self.cur.execute("SELECT * FROM users")
-        rows = self.cur.fetchall()
-        return [dict(row) for row in rows]
+        return [dict(row) for row in self.cur.fetchall()]
 
-    def get_all_users(self) -> List[Dict]:
-        cur = self.conn.cursor()
-        cur.execute("SELECT user_id, username FROM users")
-        rows = cur.fetchall()
-        return [{"user_id": r[0], "username": r[1]} for r in rows]
+    # ======== EVENTS ========
+    def get_active_event(self) -> Optional[Dict]:
+        self.cur.execute("SELECT * FROM events ORDER BY id DESC LIMIT 1")
+        row = self.cur.fetchone()
+        if not row:
+            return None
+        event = dict(row)
+        if event["expires"] > time.time():
+            return event
+        else:
+            self.clear_event()
+            return None
 
-    def reset_user_progress(self, user_id: int):
-        self.cur.execute("""
-            UPDATE users
-            SET bananas=0,
-                per_click=1,
-                per_second=0,
-                upgrades='{}'
-            WHERE user_id=?
-        """, (user_id,))
+    def set_event(self, type_: str, multiplier: float, expires: float):
+        self.cur.execute("DELETE FROM events")
+        self.cur.execute("INSERT INTO events (type, multiplier, expires) VALUES (?, ?, ?)", (type_, multiplier, expires))
         self.conn.commit()
 
-    def add_gold_banana(self, user_id: int):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400
-        self.update_user(user_id, gold_expires=gold_expires)
-
-    def add_passive_clicks(self, user_id: int, amount: int = 2):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        self.update_user(user_id, per_second=user.get("per_second", 0) + amount)
-
-    def add_bananas(self, user_id: int, amount: int):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
+    def clear_event(self):
+        self.cur.execute("DELETE FROM events")
+        self.conn.commit()
 
     def close(self):
         self.conn.close()

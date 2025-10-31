@@ -35,7 +35,8 @@ async def event_checker_loop(db: DB, interval: int = 30):
     logger.info("🟢 Event checker loop started")
     while True:
         try:
-            await db.check_and_remove_expired_events()
+            # УБРАЛ AWAIT - метод синхронный
+            db.check_and_remove_expired_events()
             await asyncio.sleep(interval)
         except Exception as e:
             logger.exception("Error in event_checker_loop: %s", e)

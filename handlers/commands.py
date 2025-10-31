@@ -323,7 +323,7 @@ async def handle_inventory(callback: CallbackQuery):
 async def handle_back_to_main(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
-
+    
 @router.callback_query(F.data == "use_gold_banana")
 async def handle_use_gold_banana(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -332,12 +332,19 @@ async def handle_use_gold_banana(callback: CallbackQuery):
     if db.use_from_inventory(callback.from_user.id, "gold_banana", 1):
         # Активируем золотой банан - увеличиваем время
         current_expires = user.get("gold_expires", 0)
-        new_expires = max(time.time(), current_expires) + GOLD_DURATION
+        current_time = time.time()
+        
+        # Если текущее время истекло, начинаем с текущего момента
+        if current_expires < current_time:
+            new_expires = current_time + GOLD_DURATION
+        else:
+            # Иначе добавляем к существующему времени
+            new_expires = current_expires + GOLD_DURATION
         
         db.update_user(callback.from_user.id, gold_expires=new_expires)
         
         remaining = db.get_inventory(callback.from_user.id).get("gold_banana", 0)
-        remaining_time = int(new_expires - time.time())
+        remaining_time = int(new_expires - current_time)
         
         await callback.answer(
             f"✅ Золотой банан активирован! +5 минут буста.\n"
@@ -542,5 +549,6 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
 @router.callback_query()
 async def handle_unknown_callback(callback: CallbackQuery):
     await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
+
 
 

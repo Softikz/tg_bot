@@ -1,12 +1,15 @@
 # main.py
 import asyncio
 import logging
+import signal
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
-from handlers.commands import router, start_event_recovery
+from handlers.commands import router
 from storage.db import DB
 from game.logic import apply_offline_gain
 
+# Токен бота
 API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -29,19 +32,23 @@ async def passive_income_loop(db: DB, interval: int = 1):
 
 async def main():
     logger.info("🚀 Бот запускается...")
-
+    
     db = DB()
-
+    
     bot = Bot(token=API_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
 
+    # Подключаем роутер
     dp.include_router(router)
+    
+    logger.info(f"Бот запущен. Роутер подключен.")
 
     asyncio.create_task(passive_income_loop(db))
-    asyncio.create_task(start_event_recovery(db, bot))
 
     try:
         await dp.start_polling(bot)
+    except Exception as e:
+        logger.exception("Polling error: %s", e)
     finally:
         await bot.session.close()
         db.close()
@@ -49,4 +56,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-

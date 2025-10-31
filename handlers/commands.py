@@ -424,4 +424,97 @@ async def handle_rebirth(callback: CallbackQuery):
     await callback.answer()
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
-   
+    current_bananas = user["bananas"]
+    requirement = get_rebirth_requirement(rebirth_count)
+    
+    progress_bar = create_progress_bar(current_bananas, requirement)
+    reward = get_rebirth_reward(rebirth_count)
+    
+    text = (
+        f"🌌 Перерождение\n\n"
+        f"🔁 Перерождений всего: {rebirth_count}\n"
+        f"🍌 Твои бананы: {current_bananas}/{requirement}\n"
+        f"{progress_bar}\n\n"
+        f"🎁 Награда за перерождение:\n{reward}\n\n"
+        f"⚠️ При перерождении весь прогресс сбрасывается!"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    
+    if current_bananas >= requirement:
+        keyboard.inline_keyboard.append([InlineKeyboardButton(text="🚀 ПЕРЕРОДИТЬСЯ", callback_data="confirm_rebirth")])
+    
+    keyboard.inline_keyboard.append([InlineKeyboardButton(text="⬅ Назад", callback_data="back_to_main")])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard)
+
+@router.callback_query(F.data == "confirm_rebirth")
+async def handle_confirm_rebirth(callback: CallbackQuery):
+    user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
+    rebirth_count = user.get("rebirths", 0)
+    requirement = get_rebirth_requirement(rebirth_count)
+    
+    if user["bananas"] < requirement:
+        await callback.answer("❌ Недостаточно бананов для перерождения!", show_alert=True)
+        return
+    
+    # Анимация перерождения
+    animation_messages = [
+        "🌠 Запускаем перерождение...",
+        "💫 Собираем звёздную пыль...",
+        "☄️ Призываем метеориты...",
+        "🌟 Поглощаем энергию вселенной...",
+        "🚀 ПЕРЕРОЖДЕНИЕ!"
+    ]
+    
+    for i, message in enumerate(animation_messages):
+        stars = "✨" * (i + 1)
+        meteors = "☄️" * (i + 1)
+        await callback.message.edit_text(f"{stars}\n{message}\n{meteors}")
+        await asyncio.sleep(1)
+    
+    # Награды за перерождение
+    rewards = {
+        0: {"gold_banana": 1},
+        1: {"gold_banana": 2},
+        2: {"gold_banana": 3},
+        3: {"gold_banana": 5},
+        4: {"gold_banana": 8}
+    }
+    
+    reward = rewards.get(rebirth_count, {"gold_banana": 10})
+    
+    # Добавляем награды в инвентарь
+    inventory = user.get("inventory", {})
+    for item, quantity in reward.items():
+        inventory[item] = inventory.get(item, 0) + quantity
+    
+    # Сбрасываем прогресс и увеличиваем счетчик перерождений
+    db.update_user(
+        callback.from_user.id, 
+        bananas=0, 
+        per_click=1, 
+        per_second=0, 
+        upgrades={},
+        rebirths=rebirth_count + 1,
+        inventory=inventory
+    )
+    
+    # Финальное сообщение
+    reward_text = ""
+    for item, quantity in reward.items():
+        if item == "gold_banana":
+            reward_text += f"✨ Золотых Бананов: +{quantity}\n"
+    
+    await callback.message.edit_text(
+        f"🎉 Перерождение завершено!\n\n"
+        f"🔁 Уровень перерождения: {rebirth_count + 1}\n\n"
+        f"🎁 Полученные награды:\n{reward_text}\n"
+        f"💫 Ты стал сильнее! Прогресс сброшен, но награды остались с тобой!",
+        reply_markup=main_menu_keyboard()
+    )
+
+# Обработчик для неизвестных callback'ов
+@router.callback_query()
+async def handle_unknown_callback(callback: CallbackQuery):
+    await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)

@@ -7,7 +7,7 @@ from handlers.commands import router, start_event_recovery
 from storage.db import DB
 from game.logic import apply_offline_gain
 
-API_TOKEN = "ВАШ_ТОКЕН_ЗДЕСЬ"
+API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -49,3 +49,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+

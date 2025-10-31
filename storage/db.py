@@ -35,6 +35,7 @@ class DB:
         )
         """)
         
+        # Таблица активных ивентов
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS active_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,7 +109,42 @@ class DB:
             users.append(user)
         return users
 
-    # Инвентарь методы
+    def get_all_users(self) -> List[Dict]:
+        self.cur.execute("SELECT user_id, username FROM users")
+        rows = self.cur.fetchall()
+        return [{"user_id": r[0], "username": r[1]} for r in rows]
+
+    def reset_user_progress(self, user_id: int):
+        self.cur.execute("""
+            UPDATE users
+            SET bananas=0,
+                per_click=1,
+                per_second=0,
+                upgrades='{}'
+            WHERE user_id=?
+        """, (user_id,))
+        self.conn.commit()
+
+    def add_gold_banana(self, user_id: int):
+        user = self.get_user(user_id)
+        if not user:
+            return
+        gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400
+        self.update_user(user_id, gold_expires=gold_expires)
+
+    def add_passive_clicks(self, user_id: int, amount: int = 2):
+        user = self.get_user(user_id)
+        if not user:
+            return
+        self.update_user(user_id, per_second=user.get("per_second", 0) + amount)
+
+    def add_bananas(self, user_id: int, amount: int):
+        user = self.get_user(user_id)
+        if not user:
+            return
+        self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
+
+    # Методы для инвентаря
     def add_to_inventory(self, user_id: int, item: str, quantity: int = 1):
         user = self.get_user(user_id)
         if not user:
@@ -141,7 +177,7 @@ class DB:
         user = self.get_user(user_id)
         return user.get("inventory", {}) if user else {}
 
-    # Остальные методы без изменений
+    # Методы для ивентов
     def start_event_for_all_users(self, event_type: str, multiplier: float, duration_seconds: int):
         expires_at = time.time() + duration_seconds
         self.cur.execute("""
@@ -170,6 +206,17 @@ class DB:
         """, (current_time,))
         
         self.conn.commit()
+
+    def get_active_event(self):
+        self.cur.execute("""
+            SELECT * FROM active_events 
+            WHERE expires_at > ? 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """, (time.time(),))
+        
+        row = self.cur.fetchone()
+        return dict(row) if row else None
 
     def close(self):
         if hasattr(self, 'conn'):

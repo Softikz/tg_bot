@@ -84,19 +84,17 @@ def shop_text(user: Dict) -> str:
     collector_cost = cost_for_upgrade("collector", collector_level)
     gold_cost = cost_for_upgrade("gold", gold_level)
     
-    # УБРАЛ progression_info
     return (
         f"🛒 Магазин улучшений\n\n"
         f"💰 Баланс: {int(user['bananas'])} 🍌\n\n"
         f"1️⃣ Улучшить клик (уровень {click_level}) → +1 банан за клик\n"
-        f"💵 Стоимость: {click_cost} 🍌\n\n"  # УБРАЛ {progression_info}
+        f"💵 Стоимость: {click_cost} 🍌\n\n"
         f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
         f"💵 Стоимость: {collector_cost} 🍌\n\n"
         f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level})\n"
         f"💵 Стоимость: {gold_cost} 🍌\n"
         f"⚡ Эффект: x2 к кликам на {GOLD_DURATION} секунд\n"
     )
-
 
 def shop_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -414,3 +412,4 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
 async def handle_unknown_callback(callback: CallbackQuery):
     log.warning(f"Необработанный callback: {callback.data} от пользователя {callback.from_user.id}")
     await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
+

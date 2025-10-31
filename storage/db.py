@@ -6,13 +6,23 @@ import os
 from typing import List, Dict
 
 class DB:
-    def __init__(self, path="database.db"):
-        # Используем абсолютный путь для Railway
+    def __init__(self, path="/data/database.db"):
+        """
+        Используем /data/ директорию которая сохраняется при рестартах
+        В Railway /data/ является постоянным хранилищем
+        """
+        # Создаем директорию если её нет
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        
         self.path = path
         self.conn = sqlite3.connect(self.path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
         self._create_tables()
+        
+        # Логируем информацию о базе
+        print(f"📦 База данных инициализирована: {self.path}")
+        print(f"📊 Размер базы: {os.path.getsize(self.path) if os.path.exists(self.path) else 0} байт")
 
     def _create_tables(self):
         """Создание таблиц если они не существуют"""
@@ -34,7 +44,7 @@ class DB:
         )
         """)
         
-        # Таблица активных ивентов (для админских функций)
+        # Таблица активных ивентов
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS active_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +55,16 @@ class DB:
         )
         """)
         
+        # Таблица для системной информации
+        self.cur.execute("""
+        CREATE TABLE IF NOT EXISTS system_info (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """)
+        
         self.conn.commit()
+        print("✅ Таблицы базы данных проверены/созданы")
 
     def create_user_if_not_exists(self, user_id, username):
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
@@ -55,6 +74,7 @@ class DB:
                 (user_id, username, "{}", time.time())
             )
             self.conn.commit()
+            print(f"👤 Создан новый пользователь: {username} (ID: {user_id})")
 
     def get_user(self, user_id) -> Dict:
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
@@ -71,26 +91,44 @@ class DB:
     def update_user(self, user_id, **kwargs):
         if not kwargs:
             return
-        updates = []
-        values = []
-        for key, value in kwargs.items():
-            if key == "upgrades":
-                value = json.dumps(value)
-            updates.append(f"{key} = ?")
-            values.append(value)
-        values.append(user_id)
-        self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?", values)
-        self.conn.commit()
+        
+        # Используем транзакцию для безопасности
+        self.conn.execute("BEGIN TRANSACTION")
+        try:
+            updates = []
+            values = []
+            for key, value in kwargs.items():
+                if key == "upgrades":
+                    value = json.dumps(value)
+                updates.append(f"{key} = ?")
+                values.append(value)
+            values.append(user_id)
+            
+            query = f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?"
+            self.cur.execute(query, values)
+            self.conn.commit()
+            
+        except Exception as e:
+            self.conn.rollback()
+            print(f"❌ Ошибка обновления пользователя {user_id}: {e}")
+            raise e
 
     def all_users(self) -> List[Dict]:
         self.cur.execute("SELECT * FROM users")
         rows = self.cur.fetchall()
-        return [dict(row) for row in rows]
+        users = []
+        for row in rows:
+            user = dict(row)
+            try:
+                user["upgrades"] = json.loads(user.get("upgrades") or "{}")
+            except Exception:
+                user["upgrades"] = {}
+            users.append(user)
+        return users
 
     def get_all_users(self) -> List[Dict]:
-        cur = self.conn.cursor()
-        cur.execute("SELECT user_id, username FROM users")
-        rows = cur.fetchall()
+        self.cur.execute("SELECT user_id, username FROM users")
+        rows = self.cur.fetchall()
         return [{"user_id": r[0], "username": r[1]} for r in rows]
 
     def reset_user_progress(self, user_id: int):
@@ -123,24 +161,23 @@ class DB:
             return
         self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
 
-    # Новые методы для работы с ивентами
+    # Методы для работы с ивентами
     def start_event_for_all_users(self, event_type: str, multiplier: float, duration_seconds: int):
         """Запустить ивент для всех пользователей"""
         expires_at = time.time() + duration_seconds
         
-        # Обновляем всех пользователей
         self.cur.execute("""
             UPDATE users 
             SET event_expires = ?, event_multiplier = ?, event_type = ?
         """, (expires_at, multiplier, event_type))
         
-        # Сохраняем ивент в таблицу активных ивентов
         self.cur.execute("""
             INSERT INTO active_events (event_type, multiplier, expires_at)
             VALUES (?, ?, ?)
         """, (event_type, multiplier, expires_at))
         
         self.conn.commit()
+        print(f"🎉 Запущен ивент: {event_type} x{multiplier} на {duration_seconds} сек")
 
     def check_and_remove_expired_events(self):
         """Проверить и удалить истекшие ивенты"""
@@ -148,13 +185,13 @@ class DB:
         
         # Находим пользователей с истекшими ивентами
         self.cur.execute("""
-            SELECT user_id FROM users 
+            SELECT COUNT(*) FROM users 
             WHERE event_expires > 0 AND event_expires <= ?
         """, (current_time,))
         
-        expired_users = self.cur.fetchall()
+        expired_count = self.cur.fetchone()[0]
         
-        if expired_users:
+        if expired_count > 0:
             # Сбрасываем ивенты для этих пользователей
             self.cur.execute("""
                 UPDATE users 
@@ -169,7 +206,7 @@ class DB:
             """, (current_time,))
             
             self.conn.commit()
-            print(f"Сброшены ивенты для {len(expired_users)} пользователей")
+            print(f"🕒 Сброшены ивенты для {expired_count} пользователей")
 
     def get_active_event(self):
         """Получить текущий активный ивент"""
@@ -183,28 +220,31 @@ class DB:
         row = self.cur.fetchone()
         return dict(row) if row else None
 
-    def close(self):
-        self.conn.close()
-
-def safe_update_user(self, user_id, **kwargs):
-    """Безопасное обновление пользователя с блокировкой"""
-    if not kwargs:
-        return
-    
-    # Используем транзакцию для избежания конфликтов
-    self.conn.execute("BEGIN TRANSACTION")
-    try:
-        updates = []
-        values = []
-        for key, value in kwargs.items():
-            if key == "upgrades":
-                value = json.dumps(value)
-            updates.append(f"{key} = ?")
-            values.append(value)
-        values.append(user_id)
+    def get_database_stats(self):
+        """Получить статистику базы данных"""
+        self.cur.execute("SELECT COUNT(*) FROM users")
+        user_count = self.cur.fetchone()[0]
         
-        self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?", values)
-        self.conn.commit()
-    except Exception as e:
-        self.conn.rollback()
-        raise e
+        self.cur.execute("SELECT SUM(bananas) FROM users")
+        total_bananas = self.cur.fetchone()[0] or 0
+        
+        return {
+            "user_count": user_count,
+            "total_bananas": total_bananas,
+            "database_size": os.path.getsize(self.path) if os.path.exists(self.path) else 0,
+            "database_path": self.path
+        }
+
+    def backup_database(self):
+        """Создать резервную копию базы данных"""
+        backup_path = f"{self.path}.backup"
+        import shutil
+        shutil.copy2(self.path, backup_path)
+        print(f"💾 Создана резервная копия: {backup_path}")
+        return backup_path
+
+    def close(self):
+        """Корректное закрытие соединения с базой"""
+        if hasattr(self, 'conn'):
+            self.conn.close()
+            print("🔒 Соединение с базой данных закрыто")

@@ -30,6 +30,17 @@ async def passive_income_loop(db: DB, interval: int = 1):
             logger.exception("Error in passive_income_loop: %s", e)
             await asyncio.sleep(5)
 
+async def event_checker_loop(db: DB, interval: int = 30):
+    """Проверка активных ивентов"""
+    logger.info("🟢 Event checker loop started")
+    while True:
+        try:
+            await db.check_and_remove_expired_events()
+            await asyncio.sleep(interval)
+        except Exception as e:
+            logger.exception("Error in event_checker_loop: %s", e)
+            await asyncio.sleep(60)
+
 async def main():
     logger.info("🚀 Бот запускается...")
     
@@ -43,7 +54,9 @@ async def main():
     
     logger.info(f"Бот запущен. Роутер подключен.")
 
+    # Запуск фоновых задач
     asyncio.create_task(passive_income_loop(db))
+    asyncio.create_task(event_checker_loop(db))
 
     try:
         await dp.start_polling(bot)

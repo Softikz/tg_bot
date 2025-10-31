@@ -43,7 +43,7 @@ def profile_text(user: Dict) -> str:
     text = (
         f"👤 Профиль @{user['username']}\n\n"
         f"🍌 Бананы: {int(user['bananas'])}\n"
-        f"🖱 За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
+        f"🖱 За клик: {effective_per_click(user)}\n"  # УБРАЛ "(база: {user['per_click']})"
         f"⚙️ Пассивно: {user['per_second']} / сек\n"
     )
     
@@ -84,20 +84,12 @@ def shop_text(user: Dict) -> str:
     collector_cost = cost_for_upgrade("collector", collector_level)
     gold_cost = cost_for_upgrade("gold", gold_level)
     
-    # Информация о прогрессии цен для кликов
-    progression_info = ""
-    if click_level == 0:
-        progression_info = "→ +150, +100, +150, +200..."
-    elif click_level == 1:
-        progression_info = "→ +100, +150, +200..."
-    elif click_level == 2:
-        progression_info = "→ +150, +200..."
-    
+    # УБРАЛ progression_info
     return (
         f"🛒 Магазин улучшений\n\n"
         f"💰 Баланс: {int(user['bananas'])} 🍌\n\n"
         f"1️⃣ Улучшить клик (уровень {click_level}) → +1 банан за клик\n"
-        f"💵 Стоимость: {click_cost} 🍌 {progression_info}\n\n"
+        f"💵 Стоимость: {click_cost} 🍌\n\n"  # УБРАЛ {progression_info}
         f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
         f"💵 Стоимость: {collector_cost} 🍌\n\n"
         f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level})\n"
@@ -243,7 +235,7 @@ async def handle_click(callback: CallbackQuery):
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
-        f"За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
+        f"За клик: {effective_per_click(user)}\n"  # УБРАЛ "(база: {user['per_click']})"
         f"Пассив: {user['per_second']}/сек\n"
     )
     

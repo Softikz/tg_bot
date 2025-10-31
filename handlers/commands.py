@@ -275,6 +275,7 @@ async def handle_click(callback: CallbackQuery):
     
     user = db.get_user(callback.from_user.id)
     
+    # Добавим подробную информацию о бустах
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
@@ -285,16 +286,18 @@ async def handle_click(callback: CallbackQuery):
     boosts = []
     if has_active_gold(user):
         remaining = int(user.get("gold_expires", 0) - time.time())
-        boosts.append(f"✨ Золотой банан (2×)")
+        boosts.append(f"✨ Золотой банан (2×) - {remaining} сек")
+        # Добавим отладочную информацию
+        text += f"\n🔍 Отладка: gold_expires={user.get('gold_expires', 0)}, current_time={int(time.time())}\n"
     
     if has_active_event(user):
         remaining = int(user.get("event_expires", 0) - time.time())
         multiplier = user.get("event_multiplier", 1.0)
         event_type = user.get("event_type", "")
-        boosts.append(f"🎯 {event_type} ({multiplier}×)")
+        boosts.append(f"🎯 {event_type} ({multiplier}×) - {remaining} сек")
     
     if boosts:
-        text += "⚡ " + " + ".join(boosts) + "\n"
+        text += "\n⚡ Активные бусты:\n" + "\n".join(f"• {boost}" for boost in boosts) + "\n"
     
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
@@ -539,4 +542,5 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
 @router.callback_query()
 async def handle_unknown_callback(callback: CallbackQuery):
     await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
+
 

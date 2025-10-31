@@ -185,3 +185,26 @@ class DB:
 
     def close(self):
         self.conn.close()
+
+def safe_update_user(self, user_id, **kwargs):
+    """Безопасное обновление пользователя с блокировкой"""
+    if not kwargs:
+        return
+    
+    # Используем транзакцию для избежания конфликтов
+    self.conn.execute("BEGIN TRANSACTION")
+    try:
+        updates = []
+        values = []
+        for key, value in kwargs.items():
+            if key == "upgrades":
+                value = json.dumps(value)
+            updates.append(f"{key} = ?")
+            values.append(value)
+        values.append(user_id)
+        
+        self.cur.execute(f"UPDATE users SET {', '.join(updates)} WHERE user_id = ?", values)
+        self.conn.commit()
+    except Exception as e:
+        self.conn.rollback()
+        raise e

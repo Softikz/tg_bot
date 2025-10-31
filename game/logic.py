@@ -11,18 +11,23 @@ GOLD_DURATION = 300  # 5 минут
 def cost_for_upgrade(kind: str, level: int) -> int:
     """Рассчитать стоимость улучшения с новой прогрессией"""
     if kind == "click":
-        # Новая прогрессия: 50, 200, 300, 450, 650, 900...
+        # Новая прогрессия: 
+        # Уровень 0 → 1: 50
+        # Уровень 1 → 2: 200 (50 + 150)
+        # Уровень 2 → 3: 300 (200 + 100) 
+        # Уровень 3 → 4: 450 (300 + 150)
+        # Уровень 4 → 5: 650 (450 + 200)
+        # Уровень 5 → 6: 900 (650 + 250)
+        # и т.д.
+        
         if level == 0:
-            return CLICK_BASE_COST  # 50
-        elif level == 1:
-            return 200  # 50 + 150
-        elif level == 2:
-            return 300  # 200 + 100
+            return CLICK_BASE_COST  # 50 для первого улучшения
         else:
-            # Для уровней >=3: 450, 650, 900...
-            # Формула: предыдущая_цена + 150 + 50*(level-2)
+            # Для уровней >=1: предыдущая_цена + 150 + 50*(level-1)
             prev_cost = cost_for_upgrade("click", level-1)
-            return prev_cost + 150 + 50 * (level - 2)
+            increase = 150 + 50 * (level - 1)
+            return prev_cost + increase
+            
     elif kind == "collector":
         return 100 * (level + 1) * 2
     elif kind == "gold":

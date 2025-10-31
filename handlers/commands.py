@@ -14,8 +14,10 @@ from game.logic import (
     effective_per_click,
     GOLD_DURATION,
     has_active_gold,
+    has_active_event,
     calculate_per_click,
-    calculate_per_second
+    calculate_per_second,
+    parse_event_duration
 )
 
 # Создаем роутер
@@ -44,9 +46,22 @@ def profile_text(user: Dict) -> str:
         f"🖱 За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
         f"⚙️ Пассивно: {user['per_second']} / сек\n"
     )
+    
+    # Информация об активных бустах
+    boosts = []
     if has_active_gold(user):
         remaining = int(user.get("gold_expires", 0) - time.time())
-        text += f"✨ Золотой банан активен! ({remaining} сек)\n"
+        boosts.append(f"✨ Золотой банан (2×) - {remaining} сек")
+    
+    if has_active_event(user):
+        remaining = int(user.get("event_expires", 0) - time.time())
+        multiplier = user.get("event_multiplier", 1.0)
+        event_type = user.get("event_type", "")
+        boosts.append(f"🎯 {event_type} ({multiplier}×) - {remaining} сек")
+    
+    if boosts:
+        text += "\n⚡ Активные бусты:\n" + "\n".join(f"• {boost}" for boost in boosts) + "\n"
+    
     text += f"🔁 Перерождений: {user.get('rebirths', 0)}\n"
     
     upgrades = user.get("upgrades", {})
@@ -69,11 +84,20 @@ def shop_text(user: Dict) -> str:
     collector_cost = cost_for_upgrade("collector", collector_level)
     gold_cost = cost_for_upgrade("gold", gold_level)
     
+    # Информация о прогрессии цен для кликов
+    progression_info = ""
+    if click_level == 0:
+        progression_info = "→ +150, +100, +150, +200..."
+    elif click_level == 1:
+        progression_info = "→ +100, +150, +200..."
+    elif click_level == 2:
+        progression_info = "→ +150, +200..."
+    
     return (
         f"🛒 Магазин улучшений\n\n"
         f"💰 Баланс: {int(user['bananas'])} 🍌\n\n"
         f"1️⃣ Улучшить клик (уровень {click_level}) → +1 банан за клик\n"
-        f"💵 Стоимость: {click_cost} 🍌\n\n"
+        f"💵 Стоимость: {click_cost} 🍌 {progression_info}\n\n"
         f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
         f"💵 Стоимость: {collector_cost} 🍌\n\n"
         f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level})\n"
@@ -146,6 +170,62 @@ async def admin_command(message: types.Message):
     await message.answer(f"✅ Добавлено {amount} 🍌\nБаланс: {user['bananas'] + amount} 🍌")
 
 
+@router.message(Command("event"))
+async def event_command(message: types.Message):
+    """Админская команда для запуска ивентов"""
+    args = message.text.split()
+    if len(args) != 4:
+        await message.answer(
+            "⚠️ Использование: /event <пароль> <тип_ивента> <длительность>\n\n"
+            "Примеры:\n"
+            "/event sm10082x3% clickx5 1:30 - клики x5 на 1.5 часа\n"
+            "/event sm10082x3% clickx3 0:45 - клики x3 на 45 минут\n"
+            "/event sm10082x3% incomex2 2:00 - доход x2 на 2 часа"
+        )
+        return
+
+    _, password, event_type, duration_str = args
+    
+    # Проверка пароля
+    if password != ADMIN_PASSWORD:
+        await message.answer("❌ Неверный пароль.")
+        return
+
+    try:
+        # Парсинг длительности
+        duration_seconds = parse_event_duration(duration_str)
+        
+        # Парсинг типа ивента и множителя
+        if 'x' in event_type:
+            event_name, multiplier_str = event_type.split('x')
+            multiplier = float(multiplier_str)
+        else:
+            event_name = event_type
+            multiplier = 2.0  # значение по умолчанию
+        
+        # Запускаем ивент для всех пользователей
+        db.start_event_for_all_users(event_type, multiplier, duration_seconds)
+        
+        # Форматируем время для ответа
+        hours = duration_seconds // 3600
+        minutes = (duration_seconds % 3600) // 60
+        
+        time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes}м"
+        
+        await message.answer(
+            f"🎉 Ивент запущен!\n\n"
+            f"📊 Тип: {event_type}\n"
+            f"⚡ Множитель: {multiplier}×\n"
+            f"⏰ Длительность: {time_str}\n\n"
+            f"Ивент автоматически завершится через указанное время."
+        )
+        
+    except ValueError as e:
+        await message.answer(f"❌ Ошибка: {e}")
+    except Exception as e:
+        await message.answer(f"❌ Неизвестная ошибка: {e}")
+
+
 # ========== ОБРАБОТЧИКИ CALLBACK КНОПОК ==========
 
 @router.callback_query(F.data == "click")
@@ -158,15 +238,29 @@ async def handle_click(callback: CallbackQuery):
     db.update_user(callback.from_user.id, bananas=new_bananas, last_update=time.time())
     
     user = db.get_user(callback.from_user.id)
+    
+    # Формируем текст с информацией о бустах
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
         f"За клик: {effective_per_click(user)} (база: {user['per_click']})\n"
         f"Пассив: {user['per_second']}/сек\n"
     )
+    
+    # Добавляем информацию об активных бустах
+    boosts = []
     if has_active_gold(user):
         remaining = int(user.get("gold_expires", 0) - time.time())
-        text += f"✨ Активен Золотой Банан (2×) - {remaining} сек\n"
+        boosts.append(f"✨ Золотой банан (2×)")
+    
+    if has_active_event(user):
+        remaining = int(user.get("event_expires", 0) - time.time())
+        multiplier = user.get("event_multiplier", 1.0)
+        event_type = user.get("event_type", "")
+        boosts.append(f"🎯 {event_type} ({multiplier}×)")
+    
+    if boosts:
+        text += "⚡ " + " + ".join(boosts) + "\n"
     
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
@@ -214,7 +308,10 @@ async def handle_buy_click(callback: CallbackQuery):
         upgrades=new_upgrades
     )
     
-    await callback.answer(f"✅ Улучшение клика куплено! Теперь уровень {level + 1}", show_alert=True)
+    next_level = level + 1
+    next_cost = cost_for_upgrade("click", next_level)
+    
+    await callback.answer(f"✅ Улучшение клика куплено! Уровень {next_level}. Следующее: {next_cost} 🍌", show_alert=True)
     
     user = db.get_user(callback.from_user.id)
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())

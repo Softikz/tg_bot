@@ -19,7 +19,9 @@ class DB:
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
-            username TEXT,
+            telegram_username TEXT,
+            nickname TEXT UNIQUE,
+            password_hash TEXT,
             bananas INTEGER DEFAULT 0,
             per_click INTEGER DEFAULT 1,
             per_second INTEGER DEFAULT 0,
@@ -46,12 +48,12 @@ class DB:
         
         self.conn.commit()
 
-    def create_user_if_not_exists(self, user_id, username):
+    def create_user_if_not_exists(self, user_id, telegram_username):
         self.cur.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
         if not self.cur.fetchone():
             self.cur.execute(
-                "INSERT INTO users (user_id, username, upgrades, last_update, inventory) VALUES (?, ?, ?, ?, ?)",
-                (user_id, username, "{}", time.time(), "{}")
+                "INSERT INTO users (user_id, telegram_username, upgrades, last_update, inventory) VALUES (?, ?, ?, ?, ?)",
+                (user_id, telegram_username, "{}", time.time(), "{}")
             )
             self.conn.commit()
 

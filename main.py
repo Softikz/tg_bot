@@ -14,6 +14,9 @@ API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+# Глобальная переменная для бота (для использования в других модулях)
+bot = None
+
 async def passive_income_loop(db: DB, interval: int = 1):
     """Фоновая задача для пассивного дохода"""
     logger.info("🟢 Passive income loop started")
@@ -42,6 +45,7 @@ async def event_checker_loop(db: DB, interval: int = 30):
             await asyncio.sleep(60)
 
 async def main():
+    global bot
     logger.info("🚀 Бот запускается...")
     
     # Инициализация базы данных

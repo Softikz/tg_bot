@@ -16,7 +16,6 @@ class DB:
         self._create_tables()
 
     def _create_tables(self):
-        # Таблица пользователей
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -35,7 +34,6 @@ class DB:
         )
         """)
         
-        # Таблица активных ивентов
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS active_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,42 +107,7 @@ class DB:
             users.append(user)
         return users
 
-    def get_all_users(self) -> List[Dict]:
-        self.cur.execute("SELECT user_id, username FROM users")
-        rows = self.cur.fetchall()
-        return [{"user_id": r[0], "username": r[1]} for r in rows]
-
-    def reset_user_progress(self, user_id: int):
-        self.cur.execute("""
-            UPDATE users
-            SET bananas=0,
-                per_click=1,
-                per_second=0,
-                upgrades='{}'
-            WHERE user_id=?
-        """, (user_id,))
-        self.conn.commit()
-
-    def add_gold_banana(self, user_id: int):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        gold_expires = max(time.time(), user.get("gold_expires", 0)) + 86400
-        self.update_user(user_id, gold_expires=gold_expires)
-
-    def add_passive_clicks(self, user_id: int, amount: int = 2):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        self.update_user(user_id, per_second=user.get("per_second", 0) + amount)
-
-    def add_bananas(self, user_id: int, amount: int):
-        user = self.get_user(user_id)
-        if not user:
-            return
-        self.update_user(user_id, bananas=user.get("bananas", 0) + amount)
-
-    # Методы для инвентаря
+    # Инвентарь методы
     def add_to_inventory(self, user_id: int, item: str, quantity: int = 1):
         user = self.get_user(user_id)
         if not user:
@@ -152,7 +115,6 @@ class DB:
         
         inventory = user.get("inventory", {})
         inventory[item] = inventory.get(item, 0) + quantity
-        
         self.update_user(user_id, inventory=inventory)
 
     def use_from_inventory(self, user_id: int, item: str, quantity: int = 1):
@@ -206,17 +168,6 @@ class DB:
         """, (current_time,))
         
         self.conn.commit()
-
-    def get_active_event(self):
-        self.cur.execute("""
-            SELECT * FROM active_events 
-            WHERE expires_at > ? 
-            ORDER BY created_at DESC 
-            LIMIT 1
-        """, (time.time(),))
-        
-        row = self.cur.fetchone()
-        return dict(row) if row else None
 
     def close(self):
         if hasattr(self, 'conn'):

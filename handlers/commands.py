@@ -185,6 +185,33 @@ async def inventory_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(inventory_text(user), reply_markup=inventory_keyboard(user))
 
+# ========== АДМИН КОМАНДЫ ==========
+
+@router.message(Command("admin"))
+async def admin_command(message: types.Message):
+    user_id = message.from_user.id
+    username = message.from_user.username or "unknown"
+    
+    # Проверяем пароль
+    if len(message.text.split()) < 2:
+        await message.answer("❌ Использование: /admin <пароль>")
+        return
+    
+    password = message.text.split()[1]
+    if password != ADMIN_PASSWORD:
+        await message.answer("❌ Неверный пароль администратора!")
+        return
+    
+    # Создаем клавиатуру админа
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика бота", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="🎁 Выдать бананы", callback_data="admin_give_bananas")],
+        [InlineKeyboardButton(text="✨ Запустить ивент", callback_data="admin_start_event")],
+        [InlineKeyboardButton(text="🔄 Сбросить данные", callback_data="admin_reset_data")]
+    ])
+    
+    await message.answer("🛠️ Панель администратора:", reply_markup=keyboard)
+
 # ========== CALLBACK ОБРАБОТЧИКИ ==========
 
 @router.callback_query(F.data == "click")
@@ -442,6 +469,7 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
         inventory[item] = inventory.get(item, 0) + quantity
     
     # Сбрасываем прогресс и увеличиваем счетчик перерождений
+    # НЕ сбрасываем инвентарь и rebirths!
     db.update_user(
         callback.from_user.id, 
         bananas=0, 
@@ -449,7 +477,8 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
         per_second=0, 
         upgrades={},
         rebirths=rebirth_count + 1,
-        inventory=inventory
+        inventory=inventory,
+        gold_expires=0  # Сбрасываем активные бусты
     )
     
     # Финальное сообщение
@@ -465,3 +494,76 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
         f"💫 Ты стал сильнее! Прогресс сброшен, но награды остались с тобой!",
         reply_markup=main_menu_keyboard()
     )
+
+# ========== АДМИН ОБРАБОТЧИКИ ==========
+
+@router.callback_query(F.data.startswith("admin_"))
+async def handle_admin_commands(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    
+    # Проверяем права администратора (можно добавить проверку по ID)
+    if user_id != 789273255:  # Замени на свой ID
+        await callback.answer("❌ У вас нет прав администратора!", show_alert=True)
+        return
+    
+    action = callback.data
+    
+    if action == "admin_stats":
+        users = db.all_users()
+        total_users = len(users)
+        total_bananas = sum(user.get("bananas", 0) for user in users)
+        total_rebirths = sum(user.get("rebirths", 0) for user in users)
+        
+        stats_text = (
+            f"📊 Статистика бота:\n\n"
+            f"👥 Всего пользователей: {total_users}\n"
+            f"🍌 Всего бананов: {total_bananas}\n"
+            f"🔁 Всего перерождений: {total_rebirths}\n"
+            f"🕒 Время сервера: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        await callback.message.edit_text(stats_text)
+        await callback.answer()
+        
+    elif action == "admin_give_bananas":
+        # Здесь можно добавить логику для выдачи бананов
+        await callback.answer("Функция в разработке", show_alert=True)
+        
+    elif action == "admin_start_event":
+        # Здесь можно добавить логику для запуска ивентов
+        await callback.answer("Функция в разработке", show_alert=True)
+        
+    elif action == "admin_reset_data":
+        # Опасно! Сброс всех данных
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ ДА, сбросить все", callback_data="admin_confirm_reset")],
+            [InlineKeyboardButton(text="✅ Нет, отмена", callback_data="back_to_main")]
+        ])
+        await callback.message.edit_text(
+            "⚠️ ВНИМАНИЕ! Это сбросит ВСЕ данные всех пользователей!\n\n"
+            "Вы уверены? Это действие нельзя отменить!",
+            reply_markup=keyboard
+        )
+        await callback.answer()
+
+@router.callback_query(F.data == "admin_confirm_reset")
+async def handle_admin_confirm_reset(callback: CallbackQuery):
+    # Сбрасываем всех пользователей
+    users = db.all_users()
+    for user in users:
+        db.update_user(
+            user["user_id"],
+            bananas=0,
+            per_click=1,
+            per_second=0,
+            upgrades={},
+            rebirths=0,
+            inventory={},
+            gold_expires=0
+        )
+    
+    await callback.message.edit_text(
+        "✅ Все данные пользователей сброшены!",
+        reply_markup=main_menu_keyboard()
+    )
+    await callback.answer("Данные сброшены!", show_alert=True)

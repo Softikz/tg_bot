@@ -14,7 +14,7 @@ API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-async def passive_income_loop(db: DB, interval: int = 1):  # Уменьшил до 1 секунды!
+async def passive_income_loop(db: DB, interval: int = 1):
     """Фоновая задача для пассивного дохода"""
     logger.info("🟢 Passive income loop started")
     while True:

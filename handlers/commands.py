@@ -7,6 +7,8 @@ from typing import Dict
 from aiogram import types, F, Router
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 
 from storage.db import DB
 from game.logic import (
@@ -26,7 +28,28 @@ from game.logic import (
 router = Router()
 db = DB()
 ADMIN_PASSWORD = "sm10082x3%"
+ADMIN_ID = 789273255  # Ваш ID
 log = logging.getLogger(__name__)
+
+# Состояния для админ-панели
+class AdminStates(StatesGroup):
+    waiting_for_username = State()
+    waiting_for_bananas_amount = State()
+    waiting_for_event_type = State()
+    waiting_for_event_duration = State()
+
+# Состояния для регистрации
+class RegistrationStates(StatesGroup):
+    waiting_for_password = State()
+
+# Список доступных ивентов
+AVAILABLE_EVENTS = {
+    "event_update_2x": {"name": "🎉 Ивент в честь обновления x2", "multiplier": 2.0},
+    "event_update_3x": {"name": "🎊 Ивент в честь обновления x3", "multiplier": 3.0},
+    "event_update_5x": {"name": "🚀 Ивент в честь обновления x5", "multiplier": 5.0},
+    "event_weekend_2x": {"name": "🎯 Выходной ивент x2", "multiplier": 2.0},
+    "event_special_4x": {"name": "💎 Специальный ивент x4", "multiplier": 4.0}
+}
 
 def ensure_and_update_offline(user_id: int, username: str):
     db.create_user_if_not_exists(user_id, username)
@@ -161,27 +184,119 @@ def inventory_keyboard(user: Dict):
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
+def admin_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика бота", callback_data="admin_stats")],
+        [InlineKeyboardButton(text="🎁 Выдать бананы", callback_data="admin_give_bananas")],
+        [InlineKeyboardButton(text="✨ Запустить ивент", callback_data="admin_start_event")],
+        [InlineKeyboardButton(text="👥 Новые регистрации", callback_data="admin_new_users")],
+        [InlineKeyboardButton(text="🔄 Сбросить данные", callback_data="admin_reset_data")]
+    ])
+
+def admin_back_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅ Назад в админ-панель", callback_data="admin_back")]
+    ])
+
+def events_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    for event_id, event_data in AVAILABLE_EVENTS.items():
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(
+                text=event_data["name"], 
+                callback_data=f"admin_event_{event_id}"
+            )
+        ])
+    keyboard.inline_keyboard.append([
+        InlineKeyboardButton(text="⬅ Назад", callback_data="admin_back")
+    ])
+    return keyboard
+
+# ========== РЕГИСТРАЦИЯ ==========
 
 @router.message(Command("start"))
-async def start_command(message: types.Message):
+async def start_command(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     username = message.from_user.username or "unknown"
-    ensure_and_update_offline(user_id, username)
-    await message.answer("👋 Добро пожаловать в Banana Bot!\nНакликай себе бананы!", reply_markup=main_menu_keyboard())
+    
+    # Проверяем, есть ли пользователь в базе
+    user = db.get_user(user_id)
+    
+    if not user:
+        # Если пользователя нет, начинаем регистрацию
+        await message.answer(
+            "👋 Добро пожаловать! Для доступа к боту необходимо зарегистрироваться.\n\n"
+            "🔐 Введите пароль для регистрации:"
+        )
+        await state.set_state(RegistrationStates.waiting_for_password)
+    else:
+        # Если пользователь уже зарегистрирован
+        ensure_and_update_offline(user_id, username)
+        await message.answer("👋 Добро пожаловать в Banana Bot!\nНакликай себе бананы!", reply_markup=main_menu_keyboard())
+
+@router.message(RegistrationStates.waiting_for_password)
+async def process_registration_password(message: types.Message, state: FSMContext):
+    password = message.text.strip()
+    
+    # Проверяем пароль (можно сделать более сложную логику)
+    if password == "banana123":  # Пароль для регистрации
+        user_id = message.from_user.id
+        username = message.from_user.username or "unknown"
+        
+        # Создаем пользователя
+        db.create_user_if_not_exists(user_id, username)
+        
+        # Уведомляем админа о новой регистрации
+        try:
+            from main import bot
+            await bot.send_message(
+                ADMIN_ID,
+                f"🆕 Новая регистрация!\n"
+                f"👤 Пользователь: @{username}\n"
+                f"🆔 ID: {user_id}\n"
+                f"🕒 Время: {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        except:
+            pass
+        
+        await message.answer(
+            "✅ Регистрация успешна! Добро пожаловать в Banana Bot!\n\n"
+            "Теперь ты можешь кликать бананы, улучшать свои возможности и участвовать в ивентах!",
+            reply_markup=main_menu_keyboard()
+        )
+        await state.clear()
+    else:
+        await message.answer("❌ Неверный пароль. Попробуйте еще раз:")
+
+# ========== ОСНОВНЫЕ КОМАНДЫ ==========
 
 @router.message(Command("profile"))
 async def profile_command(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await message.answer("❌ Вы не зарегистрированы. Используйте /start для регистрации.")
+        return
+        
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(profile_text(user), reply_markup=main_menu_keyboard())
 
 @router.message(Command("shop"))
 async def shop_command(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await message.answer("❌ Вы не зарегистрированы. Используйте /start для регистрации.")
+        return
+        
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(shop_text(user), reply_markup=shop_keyboard())
 
 @router.message(Command("inventory"))
 async def inventory_command(message: types.Message):
+    user = db.get_user(message.from_user.id)
+    if not user:
+        await message.answer("❌ Вы не зарегистрированы. Используйте /start для регистрации.")
+        return
+        
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(inventory_text(user), reply_markup=inventory_keyboard(user))
 
@@ -190,7 +305,11 @@ async def inventory_command(message: types.Message):
 @router.message(Command("admin"))
 async def admin_command(message: types.Message):
     user_id = message.from_user.id
-    username = message.from_user.username or "unknown"
+    
+    # Проверяем права администратора
+    if user_id != ADMIN_ID:
+        await message.answer("❌ У вас нет прав администратора!")
+        return
     
     # Проверяем пароль
     if len(message.text.split()) < 2:
@@ -202,21 +321,18 @@ async def admin_command(message: types.Message):
         await message.answer("❌ Неверный пароль администратора!")
         return
     
-    # Создаем клавиатуру админа
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Статистика бота", callback_data="admin_stats")],
-        [InlineKeyboardButton(text="🎁 Выдать бананы", callback_data="admin_give_bananas")],
-        [InlineKeyboardButton(text="✨ Запустить ивент", callback_data="admin_start_event")],
-        [InlineKeyboardButton(text="🔄 Сбросить данные", callback_data="admin_reset_data")]
-    ])
-    
-    await message.answer("🛠️ Панель администратора:", reply_markup=keyboard)
+    await message.answer("🛠️ Панель администратора:", reply_markup=admin_keyboard())
 
 # ========== CALLBACK ОБРАБОТЧИКИ ==========
 
 @router.callback_query(F.data == "click")
 async def handle_click(callback: CallbackQuery):
     await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     per_click = effective_per_click(user)
     
@@ -251,18 +367,33 @@ async def handle_click(callback: CallbackQuery):
 @router.callback_query(F.data == "profile")
 async def handle_profile(callback: CallbackQuery):
     await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     await callback.message.edit_text(profile_text(user), reply_markup=main_menu_keyboard())
 
 @router.callback_query(F.data == "shop")
 async def handle_shop(callback: CallbackQuery):
     await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
 
 @router.callback_query(F.data == "inventory")
 async def handle_inventory(callback: CallbackQuery):
     await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     await callback.message.edit_text(inventory_text(user), reply_markup=inventory_keyboard(user))
 
@@ -273,6 +404,11 @@ async def handle_back_to_main(callback: CallbackQuery):
 
 @router.callback_query(F.data == "use_gold_banana")
 async def handle_use_gold_banana(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     
     # Используем один золотой банан из инвентаря
@@ -308,6 +444,11 @@ async def handle_use_gold_banana(callback: CallbackQuery):
 # Покупки улучшений
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
     level = upgrades.get("click", 0)
@@ -339,6 +480,11 @@ async def handle_buy_click(callback: CallbackQuery):
 
 @router.callback_query(F.data == "buy_collector")
 async def handle_buy_collector(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
     level = upgrades.get("collector", 0)
@@ -367,6 +513,11 @@ async def handle_buy_collector(callback: CallbackQuery):
 
 @router.callback_query(F.data == "buy_gold")
 async def handle_buy_gold(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     upgrades = user.get("upgrades", {}) or {}
     level = upgrades.get("gold", 0)
@@ -401,6 +552,11 @@ async def handle_buy_gold(callback: CallbackQuery):
 @router.callback_query(F.data == "rebirth")
 async def handle_rebirth(callback: CallbackQuery):
     await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
     current_bananas = user["bananas"]
@@ -429,6 +585,11 @@ async def handle_rebirth(callback: CallbackQuery):
 
 @router.callback_query(F.data == "confirm_rebirth")
 async def handle_confirm_rebirth(callback: CallbackQuery):
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не зарегистрированы!", show_alert=True)
+        return
+        
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
     rebirth_count = user.get("rebirths", 0)
     requirement = get_rebirth_requirement(rebirth_count)
@@ -498,11 +659,11 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
 # ========== АДМИН ОБРАБОТЧИКИ ==========
 
 @router.callback_query(F.data.startswith("admin_"))
-async def handle_admin_commands(callback: CallbackQuery):
+async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
     user_id = callback.from_user.id
     
-    # Проверяем права администратора (можно добавить проверку по ID)
-    if user_id != 5748972158: 
+    # Проверяем права администратора
+    if user_id != ADMIN_ID:
         await callback.answer("❌ У вас нет прав администратора!", show_alert=True)
         return
     
@@ -514,30 +675,86 @@ async def handle_admin_commands(callback: CallbackQuery):
         total_bananas = sum(user.get("bananas", 0) for user in users)
         total_rebirths = sum(user.get("rebirths", 0) for user in users)
         
+        # Новые пользователи (за последние 24 часа)
+        new_users = 0
+        for user in users:
+            if user.get("last_update", 0) > time.time() - 86400:
+                new_users += 1
+        
         stats_text = (
             f"📊 Статистика бота:\n\n"
             f"👥 Всего пользователей: {total_users}\n"
+            f"🆕 Новых за 24ч: {new_users}\n"
             f"🍌 Всего бананов: {total_bananas}\n"
             f"🔁 Всего перерождений: {total_rebirths}\n"
             f"🕒 Время сервера: {time.strftime('%Y-%m-%d %H:%M:%S')}"
         )
         
-        await callback.message.edit_text(stats_text)
+        await callback.message.edit_text(stats_text, reply_markup=admin_back_keyboard())
         await callback.answer()
         
     elif action == "admin_give_bananas":
-        # Здесь можно добавить логику для выдачи бананов
-        await callback.answer("Функция в разработке", show_alert=True)
+        await callback.message.edit_text(
+            "🎁 Выдача бананов\n\n"
+            "Выберите способ выдачи:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="👤 Конкретному пользователю", callback_data="admin_give_single")],
+                [InlineKeyboardButton(text="👥 Всем пользователям", callback_data="admin_give_all")],
+                [InlineKeyboardButton(text="⬅ Назад", callback_data="admin_back")]
+            ])
+        )
+        await callback.answer()
+        
+    elif action == "admin_give_single":
+        await callback.message.edit_text(
+            "👤 Выдача бананов пользователю\n\n"
+            "Введите @username пользователя (например, @username):"
+        )
+        await state.set_state(AdminStates.waiting_for_username)
+        await callback.answer()
+        
+    elif action == "admin_give_all":
+        await callback.message.edit_text(
+            "👥 Выдача бананов всем пользователям\n\n"
+            "Введите количество бананов для выдачи всем:"
+        )
+        await state.set_state(AdminStates.waiting_for_bananas_amount)
+        await state.update_data(give_all=True)
+        await callback.answer()
         
     elif action == "admin_start_event":
-        # Здесь можно добавить логику для запуска ивентов
-        await callback.answer("Функция в разработке", show_alert=True)
+        await callback.message.edit_text(
+            "✨ Запуск ивента\n\n"
+            "Выберите тип ивента:",
+            reply_markup=events_keyboard()
+        )
+        await callback.answer()
+        
+    elif action == "admin_new_users":
+        users = db.all_users()
+        # Сортируем по времени регистрации (последние сначала)
+        users.sort(key=lambda x: x.get("last_update", 0), reverse=True)
+        
+        new_users_text = "👥 Последние регистрации:\n\n"
+        count = 0
+        for user in users[:10]:  # Показываем последние 10
+            username = user.get("username", "unknown")
+            user_id = user.get("user_id")
+            reg_time = time.strftime('%Y-%m-%d %H:%M', time.localtime(user.get("last_update", time.time())))
+            new_users_text += f"👤 @{username} (ID: {user_id})\n🕒 {reg_time}\n\n"
+            count += 1
+        
+        if count == 0:
+            new_users_text = "❌ Нет зарегистрированных пользователей"
+            
+        await callback.message.edit_text(new_users_text, reply_markup=admin_back_keyboard())
+        await callback.answer()
         
     elif action == "admin_reset_data":
         # Опасно! Сброс всех данных
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ ДА, сбросить все", callback_data="admin_confirm_reset")],
-            [InlineKeyboardButton(text="✅ Нет, отмена", callback_data="back_to_main")]
+            [InlineKeyboardButton(text="✅ Нет, отмена", callback_data="admin_back")]
         ])
         await callback.message.edit_text(
             "⚠️ ВНИМАНИЕ! Это сбросит ВСЕ данные всех пользователей!\n\n"
@@ -545,26 +762,17 @@ async def handle_admin_commands(callback: CallbackQuery):
             reply_markup=keyboard
         )
         await callback.answer()
-
-@router.callback_query(F.data == "admin_confirm_reset")
-async def handle_admin_confirm_reset(callback: CallbackQuery):
-    # Сбрасываем всех пользователей
-    users = db.all_users()
-    for user in users:
-        db.update_user(
-            user["user_id"],
-            bananas=0,
-            per_click=1,
-            per_second=0,
-            upgrades={},
-            rebirths=0,
-            inventory={},
-            gold_expires=0
-        )
-    
-    await callback.message.edit_text(
-        "✅ Все данные пользователей сброшены!",
-        reply_markup=main_menu_keyboard()
-    )
-    await callback.answer("Данные сброшены!", show_alert=True)
-
+        
+    elif action == "admin_back":
+        await callback.message.edit_text("🛠️ Панель администратора:", reply_markup=admin_keyboard())
+        await callback.answer()
+        
+    elif action.startswith("admin_event_"):
+        event_id = action.replace("admin_event_", "")
+        event_data = AVAILABLE_EVENTS.get(event_id)
+        
+        if event_data:
+            await callback.message.edit_text(
+                f"🎯 Запуск ивента: {event_data['name']}\n\n"
+                f"Множитель: x{event_data['multiplier']}\n\n"
+                f"Введите длительность ивента в формате 'часы:мину

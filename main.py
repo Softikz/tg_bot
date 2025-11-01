@@ -14,7 +14,7 @@ API_TOKEN = "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-async def passive_income_loop(db: DB, interval: int = 5):
+async def passive_income_loop(db: DB, interval: int = 1):  # Уменьшил до 1 секунды!
     """Фоновая задача для пассивного дохода"""
     logger.info("🟢 Passive income loop started")
     while True:
@@ -28,9 +28,9 @@ async def passive_income_loop(db: DB, interval: int = 5):
             await asyncio.sleep(interval)
         except Exception as e:
             logger.exception("Error in passive_income_loop: %s", e)
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
 
-async def event_checker_loop(db: DB, interval: int = 60):
+async def event_checker_loop(db: DB, interval: int = 30):
     """Фоновая задача для проверки ивентов"""
     logger.info("🟢 Event checker loop started")
     while True:
@@ -43,10 +43,6 @@ async def event_checker_loop(db: DB, interval: int = 60):
 
 async def main():
     logger.info("🚀 Бот запускается...")
-    
-    # Логируем системную информацию
-    logger.info("=== СИСТЕМНАЯ ИНФОРМАЦИЯ ===")
-    logger.info(f"Текущая директория: {os.getcwd()}")
     
     # Инициализация базы данных
     try:

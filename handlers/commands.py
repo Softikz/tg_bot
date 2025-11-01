@@ -502,7 +502,7 @@ async def handle_admin_commands(callback: CallbackQuery):
     user_id = callback.from_user.id
     
     # Проверяем права администратора (можно добавить проверку по ID)
-    if user_id != 789273255:  # Замени на свой ID
+    if user_id != 5748972158: 
         await callback.answer("❌ У вас нет прав администратора!", show_alert=True)
         return
     
@@ -567,3 +567,4 @@ async def handle_admin_confirm_reset(callback: CallbackQuery):
         reply_markup=main_menu_keyboard()
     )
     await callback.answer("Данные сброшены!", show_alert=True)
+

@@ -40,7 +40,6 @@ def ensure_and_update_offline(user_id: int, username: str):
     return db.get_user(user_id)
 
 def create_progress_bar(current: int, total: int, size: int = 10) -> str:
-    """Создать красивую шкалу прогресса"""
     percentage = min(100, int(current / total * 100)) if total > 0 else 100
     filled = int(size * percentage / 100)
     empty = size - filled
@@ -104,6 +103,7 @@ def shop_text(user: Dict) -> str:
         f"⚡ Эффект: x2 к кликам на {GOLD_DURATION} секунд\n"
         f"📦 Добавляется в инвентарь, а не активируется сразу!"
     )
+
 def inventory_text(user: Dict) -> str:
     inventory = user.get("inventory", {})
     
@@ -185,83 +185,6 @@ async def inventory_command(message: types.Message):
     user = ensure_and_update_offline(message.from_user.id, message.from_user.username)
     await message.answer(inventory_text(user), reply_markup=inventory_keyboard(user))
 
-@router.message(Command("admin"))
-async def admin_command(message: types.Message):
-    args = message.text.split()
-    if len(args) != 3:
-        await message.answer("⚠️ Использование: /admin <пароль> <кол-во бананов>")
-        return
-
-    _, password, amount = args
-    if password != ADMIN_PASSWORD:
-        await message.answer("❌ Неверный пароль.")
-        return
-
-    try:
-        amount = int(amount)
-    except ValueError:
-        await message.answer("⚠️ Количество должно быть числом.")
-        return
-
-    user = db.get_user(message.from_user.id)
-    db.update_user(message.from_user.id, bananas=user["bananas"] + amount)
-    await message.answer(f"✅ Добавлено {amount} 🍌\nБаланс: {user['bananas'] + amount} 🍌")
-
-@router.message(Command("event"))
-async def event_command(message: types.Message):
-    """Админская команда для запуска ивентов"""
-    args = message.text.split()
-    if len(args) != 4:
-        await message.answer(
-            "⚠️ Использование: /event <пароль> <тип_ивента> <длительность>\n\n"
-            "Примеры:\n"
-            "/event sm10082x3% clickx5 1:30 - клики x5 на 1.5 часа\n"
-            "/event sm10082x3% clickx3 0:45 - клики x3 на 45 минут\n"
-            "/event sm10082x3% incomex2 2:00 - доход x2 на 2 часа"
-        )
-        return
-
-    _, password, event_type, duration_str = args
-    
-    # Проверка пароля
-    if password != ADMIN_PASSWORD:
-        await message.answer("❌ Неверный пароль.")
-        return
-
-    try:
-        # Парсинг длительности
-        duration_seconds = parse_event_duration(duration_str)
-        
-        # Парсинг типа ивента и множителя
-        if 'x' in event_type:
-            event_name, multiplier_str = event_type.split('x')
-            multiplier = float(multiplier_str)
-        else:
-            event_name = event_type
-            multiplier = 2.0  # значение по умолчанию
-        
-        # Запускаем ивент для всех пользователей
-        db.start_event_for_all_users(event_type, multiplier, duration_seconds)
-        
-        # Форматируем время для ответа
-        hours = duration_seconds // 3600
-        minutes = (duration_seconds % 3600) // 60
-        
-        time_str = f"{hours}ч {minutes}м" if hours > 0 else f"{minutes}м"
-        
-        await message.answer(
-            f"🎉 Ивент запущен!\n\n"
-            f"📊 Тип: {event_type}\n"
-            f"⚡ Множитель: {multiplier}×\n"
-            f"⏰ Длительность: {time_str}\n\n"
-            f"Ивент автоматически завершится через указанное время."
-        )
-        
-    except ValueError as e:
-        await message.answer(f"❌ Ошибка: {e}")
-    except Exception as e:
-        await message.answer(f"❌ Неизвестная ошибка: {e}")
-
 # ========== CALLBACK ОБРАБОТЧИКИ ==========
 
 @router.callback_query(F.data == "click")
@@ -275,7 +198,6 @@ async def handle_click(callback: CallbackQuery):
     
     user = db.get_user(callback.from_user.id)
     
-    # Добавим подробную информацию о бустах
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
@@ -286,18 +208,16 @@ async def handle_click(callback: CallbackQuery):
     boosts = []
     if has_active_gold(user):
         remaining = int(user.get("gold_expires", 0) - time.time())
-        boosts.append(f"✨ Золотой банан (2×) - {remaining} сек")
-        # Добавим отладочную информацию
-        text += f"\n🔍 Отладка: gold_expires={user.get('gold_expires', 0)}, current_time={int(time.time())}\n"
+        boosts.append(f"✨ Золотой банан (2×)")
     
     if has_active_event(user):
         remaining = int(user.get("event_expires", 0) - time.time())
         multiplier = user.get("event_multiplier", 1.0)
         event_type = user.get("event_type", "")
-        boosts.append(f"🎯 {event_type} ({multiplier}×) - {remaining} сек")
+        boosts.append(f"🎯 {event_type} ({multiplier}×)")
     
     if boosts:
-        text += "\n⚡ Активные бусты:\n" + "\n".join(f"• {boost}" for boost in boosts) + "\n"
+        text += "⚡ " + " + ".join(boosts) + "\n"
     
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
@@ -323,7 +243,7 @@ async def handle_inventory(callback: CallbackQuery):
 async def handle_back_to_main(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
-    
+
 @router.callback_query(F.data == "use_gold_banana")
 async def handle_use_gold_banana(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id, callback.from_user.username)
@@ -357,6 +277,7 @@ async def handle_use_gold_banana(callback: CallbackQuery):
         await callback.message.edit_text(inventory_text(user), reply_markup=inventory_keyboard(user))
     else:
         await callback.answer("❌ Нет золотых бананов в инвентаре!", show_alert=True)
+
 # Покупки улучшений
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
@@ -544,11 +465,3 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
         f"💫 Ты стал сильнее! Прогресс сброшен, но награды остались с тобой!",
         reply_markup=main_menu_keyboard()
     )
-
-# Обработчик для неизвестных callback'ов
-@router.callback_query()
-async def handle_unknown_callback(callback: CallbackQuery):
-    await callback.answer(f"Неизвестная команда: {callback.data}", show_alert=True)
-
-
-

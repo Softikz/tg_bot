@@ -775,4 +775,152 @@ async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
             await callback.message.edit_text(
                 f"🎯 Запуск ивента: {event_data['name']}\n\n"
                 f"Множитель: x{event_data['multiplier']}\n\n"
-                f"Введите длительность ивента в формате 'часы:мину
+                f"Введите длительность ивента в формате 'часы:минуты' (например, 2:30 для 2 часов 30 минут):"
+            )
+            await state.set_state(AdminStates.waiting_for_event_duration)
+            await state.update_data(event_id=event_id, event_data=event_data)
+            await callback.answer()
+
+@router.callback_query(F.data == "admin_confirm_reset")
+async def handle_admin_confirm_reset(callback: CallbackQuery):
+    # Сбрасываем всех пользователей
+    users = db.all_users()
+    for user in users:
+        db.update_user(
+            user["user_id"],
+            bananas=0,
+            per_click=1,
+            per_second=0,
+            upgrades={},
+            rebirths=0,
+            inventory={},
+            gold_expires=0
+        )
+    
+    await callback.message.edit_text(
+        "✅ Все данные пользователей сброшены!",
+        reply_markup=admin_keyboard()
+    )
+    await callback.answer("Данные сброшены!", show_alert=True)
+
+# ========== АДМИН STATES ОБРАБОТЧИКИ ==========
+
+@router.message(AdminStates.waiting_for_username)
+async def process_admin_username(message: types.Message, state: FSMContext):
+    username = message.text.strip().replace('@', '')  # Убираем @ если есть
+    
+    # Ищем пользователя по username
+    users = db.all_users()
+    target_user = None
+    for user in users:
+        if user.get("username", "").lower() == username.lower():
+            target_user = user
+            break
+    
+    if not target_user:
+        await message.answer("❌ Пользователь с таким username не найден. Попробуйте еще раз:")
+        return
+    
+    await state.update_data(target_user_id=target_user["user_id"], target_username=target_user["username"])
+    await message.answer(f"👤 Найден пользователь: @{target_user['username']}\n\nВведите количество бананов для выдачи:")
+    await state.set_state(AdminStates.waiting_for_bananas_amount)
+
+@router.message(AdminStates.waiting_for_bananas_amount)
+async def process_admin_bananas_amount(message: types.Message, state: FSMContext):
+    try:
+        bananas = int(message.text)
+        if bananas <= 0:
+            await message.answer("❌ Количество бананов должно быть положительным. Попробуйте еще раз:")
+            return
+            
+        data = await state.get_data()
+        
+        if data.get("give_all"):
+            # Выдаем бананы всем пользователям
+            users = db.all_users()
+            for user in users:
+                current_bananas = user.get("bananas", 0)
+                db.update_user(user["user_id"], bananas=current_bananas + bananas)
+            
+            await message.answer(
+                f"✅ Успешно выдано {bananas} 🍌 всем {len(users)} пользователям!",
+                reply_markup=admin_keyboard()
+            )
+        else:
+            # Выдаем бананы конкретному пользователю
+            target_user_id = data["target_user_id"]
+            target_username = data["target_username"]
+            
+            user = db.get_user(target_user_id)
+            current_bananas = user.get("bananas", 0)
+            db.update_user(target_user_id, bananas=current_bananas + bananas)
+            
+            await message.answer(
+                f"✅ Успешно выдано {bananas} 🍌 пользователю @{target_username}!",
+                reply_markup=admin_keyboard()
+            )
+            
+            # Уведомляем пользователя
+            try:
+                from main import bot
+                await bot.send_message(
+                    target_user_id,
+                    f"🎁 Администратор выдал вам {bananas} 🍌!\n\n"
+                    f"Теперь у вас: {current_bananas + bananas} бананов"
+                )
+            except:
+                pass
+        
+        await state.clear()
+        
+    except ValueError:
+        await message.answer("❌ Неверный формат числа. Введите целое число:")
+
+@router.message(AdminStates.waiting_for_event_duration)
+async def process_admin_event_duration(message: types.Message, state: FSMContext):
+    try:
+        duration_str = message.text.strip()
+        duration_seconds = parse_event_duration(duration_str)
+        
+        data = await state.get_data()
+        event_id = data["event_id"]
+        event_data = data["event_data"]
+        
+        # Запускаем ивент для всех пользователей
+        db.start_event_for_all_users(
+            event_data["name"],
+            event_data["multiplier"],
+            duration_seconds
+        )
+        
+        # Уведомляем всех пользователей
+        users = db.all_users()
+        notified = 0
+        from main import bot
+        
+        for user in users:
+            try:
+                await bot.send_message(
+                    user["user_id"],
+                    f"🎉 {event_data['name']}!\n\n"
+                    f"⚡ Множитель бананов: x{event_data['multiplier']}\n"
+                    f"⏰ Длительность: {duration_str}\n\n"
+                    f"Успей получить максимум бананов! 🍌"
+                )
+                notified += 1
+            except:
+                continue
+        
+        await message.answer(
+            f"✅ Ивент '{event_data['name']}' запущен!\n\n"
+            f"📊 Статистика:\n"
+            f"• Множитель: x{event_data['multiplier']}\n"
+            f"• Длительность: {duration_str}\n"
+            f"• Уведомлено пользователей: {notified}/{len(users)}",
+            reply_markup=admin_keyboard()
+        )
+        
+        await state.clear()
+        
+    except ValueError as e:
+        await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")

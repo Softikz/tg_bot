@@ -29,7 +29,7 @@ from game.logic import (
 router = Router()
 db = DB()
 ADMIN_PASSWORD = "sm10082x3%"
-ADMIN_ID = 789273255  # Ваш ID
+ADMIN_ID = 5748972158
 log = logging.getLogger(__name__)
 
 # Состояния для админ-панели
@@ -894,3 +894,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

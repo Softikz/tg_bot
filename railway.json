@@ -1,6 +1,5 @@
 {
   "build": {
-    "dockerfilePath": "Dockerfile",
     "buildCommand": "pip install -r requirements.txt",
     "startCommand": "python main.py"
   },
@@ -11,3 +10,4 @@
     "API_TOKEN": "8226054487:AAEiJz0n9FgOpSk62QXpgHWGGFdGjxsy9es"
   }
 }
+

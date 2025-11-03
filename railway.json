@@ -8,3 +8,8 @@
     "restartPolicyMaxRetries": 10
   }
 }
+{
+  "plugins": {
+    "sqlite": {}
+  }
+}

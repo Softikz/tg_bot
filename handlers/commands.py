@@ -176,7 +176,6 @@ def shop_text(user: Dict) -> str:
         f"💵 Разные бананы с множителями от 1.5× до 30×!\n"
         f"📦 Добавляются в инвентарь, активируются отдельно!"
     )
-)
 
 # Функции для работы с магазином бананов
 def banana_shop_text(user: Dict) -> str:
@@ -1153,3 +1152,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

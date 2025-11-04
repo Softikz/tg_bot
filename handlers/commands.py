@@ -587,7 +587,7 @@ async def handle_use_gold_banana(callback: CallbackQuery):
         
         await callback.answer(
             f"✅ Золотой банан активирован! +5 минут буста.\n"
-            f"⏰ Общее время: {remaining_time//60} мин {remaining_time%60} сек\n"
+            f"⏰ Общее время: {remaining_time//60:02d}:{remaining_time%60:02d}\n"
             f"📦 Осталось в инвентаре: {remaining}", 
             show_alert=True
         )
@@ -981,5 +981,6 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 

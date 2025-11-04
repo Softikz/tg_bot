@@ -225,6 +225,7 @@ def admin_keyboard():
         [InlineKeyboardButton(text="📊 Статистика бота", callback_data="admin_stats")],
         [InlineKeyboardButton(text="🎁 Выдать бананы", callback_data="admin_give_bananas")],
         [InlineKeyboardButton(text="✨ Запустить ивент", callback_data="admin_start_event")],
+        [InlineKeyboardButton(text="⏹️ Остановить ивент", callback_data="admin_stop_event")],
         [InlineKeyboardButton(text="👥 Новые регистрации", callback_data="admin_new_users")],
         [InlineKeyboardButton(text="🔄 Сбросить данные", callback_data="admin_reset_data")]
     ])
@@ -1049,6 +1050,7 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 
 

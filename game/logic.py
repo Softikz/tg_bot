@@ -9,7 +9,7 @@ GOLD_BASE_COST = 500           # базовая цена золотого бан
 CLICK_COST_MULTIPLIER = 1.6    # рост цены за уровень
 PASSIVE_COST_MULTIPLIER = 1.7
 GOLD_COST_MULTIPLIER = 1.8
-GOLD_DURATION = 300            # длительность "золотого" эффекта в секундах (пример)
+GOLD_DURATION = 300            # длительность "золотого" эффекта в секундах (5 минут)
 OFFLINE_CAP_SECONDS = 60 * 60 * 24  # максимум начислений оффлайн (суточный лимит)
 
 # ---------- Вспомогательные функции ----------
@@ -25,13 +25,6 @@ def format_cost(n: int) -> str:
 def cost_for_upgrade(upgrade_type: str, current_level: int) -> int:
     """
     Рассчитывает стоимость улучшения для указанного типа.
-    
-    Args:
-        upgrade_type: "click", "collector", или "gold"
-        current_level: текущий уровень улучшения
-    
-    Returns:
-        Стоимость следующего уровня
     """
     if upgrade_type == "click":
         return click_upgrade_cost(current_level)
@@ -44,14 +37,13 @@ def cost_for_upgrade(upgrade_type: str, current_level: int) -> int:
 
 def click_upgrade_cost(level: int) -> int:
     """
-    Цена следующего уровня клика (если level == 0 -> цена уровня 1).
+    Цена следующего уровня клика.
     """
-    # level - текущий уровень, цена для повышения = base * multiplier^(level)
     return max(1, int(CLICK_BASE_COST * (CLICK_COST_MULTIPLIER ** level)))
 
 def passive_upgrade_cost(level: int) -> int:
     """
-    Цена следующего уровня пассива (collector и т.п.)
+    Цена следующего уровня пассива.
     """
     return max(1, int(PASSIVE_BASE_COST * (PASSIVE_COST_MULTIPLIER ** level)))
 
@@ -63,30 +55,24 @@ def gold_upgrade_cost(level: int) -> int:
 
 def calculate_per_click(upgrades: Dict) -> int:
     """
-    Рассчитывает сколько бананов даёт один клик, с учётом апгрейдов и возможных бонусов.
-    upgrades: словарь уровней апгрейдов, например {"click": 3, ...}
+    Рассчитывает сколько бананов даёт один клик.
     """
     base_click = 1
     click_level = upgrades.get("click", 0)
-    # Простая формула: base + level * 1 (можно усложнить)
     return base_click + click_level
 
 def calculate_per_second(upgrades: Dict) -> int:
     """
-    Рассчитывает пассивный доход в секунду в зависимости от апгрейдов.
+    Рассчитывает пассивный доход в секунду.
     """
     collector_level = upgrades.get("collector", 0)
-    # Каждый уровень коллектора даёт 1 банан в секунду (пример)
     return collector_level
 
 # ---------- Оффлайн начисления ----------
 
 def apply_offline_gain(user: Dict) -> Tuple[int, float]:
     """
-    Вызывается в фоне: вычисляет сколько бананов добавить пользователю,
-    исходя из last_update и per_second (в user['per_second'] или на основании upgrades).
-    Возвращает (added_amount, new_last_update_timestamp).
-    Если ничего не добавлено — added_amount == 0.
+    Вычисляет сколько бананов добавить пользователю за оффлайн время.
     """
     last = user.get("last_update", 0) or 0
     now = current_time()
@@ -98,7 +84,7 @@ def apply_offline_gain(user: Dict) -> Tuple[int, float]:
     if elapsed > OFFLINE_CAP_SECONDS:
         elapsed = OFFLINE_CAP_SECONDS
 
-    # Получаем per_second: сначала поле, иначе считаем по апгрейдам
+    # Получаем per_second
     per_second = user.get("per_second", None)
     if per_second is None or per_second == 0:
         per_second = calculate_per_second(user.get("upgrades", {}))
@@ -117,8 +103,7 @@ def can_afford(user: Dict, price: int) -> bool:
 
 def buy_click_upgrade(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     """
-    Пытается купить апгрейд клика. Возвращает (success, message).
-    Изменяет и сохраняет данные через db.update_user.
+    Пытается купить апгрейд клика.
     """
     upgrades = user.get("upgrades", {}) or {}
     click_level = upgrades.get("click", 0)
@@ -126,18 +111,18 @@ def buy_click_upgrade(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     bananas = user.get("bananas", 0) or 0
 
     if bananas < price:
-        return False, f"У вас недостаточно бананов. Нужно {price}, у вас {bananas}."
+        return False, f"❌ Недостаточно бананов! Нужно {price} 🍌, у вас {bananas} 🍌."
 
     # Списываем и повышаем уровень
     bananas -= price
     upgrades["click"] = click_level + 1
 
     db.update_user(user_id, bananas=bananas, upgrades=upgrades)
-    return True, f"Покупка успешна! Уровень клика теперь {upgrades['click']}. Списано {price} бананов."
+    return True, f"✅ Улучшение клика куплено! Уровень: {upgrades['click']}. Списано: {price} 🍌."
 
 def buy_passive_upgrade(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     """
-    Пытается купить пассив (collector). Возвращает (success, message).
+    Пытается купить пассив (collector).
     """
     upgrades = user.get("upgrades", {}) or {}
     collector_level = upgrades.get("collector", 0)
@@ -145,18 +130,18 @@ def buy_passive_upgrade(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     bananas = user.get("bananas", 0) or 0
 
     if bananas < price:
-        return False, f"У вас недостаточно бананов. Нужно {price}, у вас {bananas}."
+        return False, f"❌ Недостаточно бананов! Нужно {price} 🍌, у вас {bananas} 🍌."
 
     bananas -= price
     upgrades["collector"] = collector_level + 1
     # Рассчитаем новый per_second и сохраним его
     per_second = calculate_per_second(upgrades)
     db.update_user(user_id, bananas=bananas, upgrades=upgrades, per_second=per_second)
-    return True, f"Покупка успешна! Уровень пассива (collector) теперь {upgrades['collector']}. Списано {price} бананов."
+    return True, f"✅ Улучшение сборщика куплено! Уровень: {upgrades['collector']}. Списано: {price} 🍌."
 
 def buy_gold_banana(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     """
-    Пытается купить золотой банан. Возвращает (success, message).
+    Пытается купить золотой банан.
     """
     upgrades = user.get("upgrades", {}) or {}
     gold_level = upgrades.get("gold", 0)
@@ -164,7 +149,7 @@ def buy_gold_banana(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     bananas = user.get("bananas", 0) or 0
 
     if bananas < price:
-        return False, f"У вас недостаточно бананов. Нужно {price}, у вас {bananas}."
+        return False, f"❌ Недостаточно бананов! Нужно {price} 🍌, у вас {bananas} 🍌."
 
     bananas -= price
     upgrades["gold"] = gold_level + 1
@@ -174,14 +159,13 @@ def buy_gold_banana(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     inventory["gold_banana"] = inventory.get("gold_banana", 0) + 1
     
     db.update_user(user_id, bananas=bananas, upgrades=upgrades, inventory=inventory)
-    return True, f"Покупка успешна! Золотой банан добавлен в инвентарь. Куплено всего: {upgrades['gold']}. Списано {price} бананов."
+    return True, f"✅ Золотой банан куплен! Добавлен в инвентарь. Всего куплено: {upgrades['gold']}. Списано: {price} 🍌."
 
 # ---------- Перерождение (rebirth) ----------
 
 def get_rebirth_requirement(rebirth_count: int) -> int:
     """
     Требование для следующего перерождения.
-    Можно сделать экспоненциальный рост. Пример:
     """
     base = 1000
     return int(base * (2 ** rebirth_count))
@@ -191,31 +175,25 @@ def get_rebirth_reward(rebirth_count: int) -> Dict:
     Возвращает награду за перерождение.
     """
     return {
-        "click_bonus": 1,  # +1 к уровню клика
-        "gold_bananas": max(1, rebirth_count // 5)  # каждый 5-й rebirth даёт дополнительный золотой банан
+        "click_bonus": 1,
+        "gold_bananas": max(1, rebirth_count // 5 + 1)
     }
 
 def perform_rebirth(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     """
-    Делает перерождение: если пользователь достигает требуемого числа бананов,
-    скидывает прогресс (частично) и добавляет бонусы (например, увеличивает rebirths).
-    Возвращает (success, message).
+    Делает перерождение.
     """
     bananas = user.get("bananas", 0) or 0
     rebirths = user.get("rebirths", 0) or 0
     req = get_rebirth_requirement(rebirths)
 
     if bananas < req:
-        return False, f"Для перерождения нужно {req} бананов, у вас {bananas}."
+        return False, f"❌ Для перерождения нужно {req} 🍌, у вас {bananas} 🍌."
 
-    # Настройка того, что происходит при перерождении:
-    # - увеличим счётчик rebirths
-    # - дадим небольшой бонус: например, повысим per_click на 1 или дадим "rebirth_points" в inventory
-    # - сбросим бананы и апгрейды (или частично)
     new_rebirths = rebirths + 1
     reward = get_rebirth_reward(new_rebirths)
 
-    # Бонус — прибавим 1 уровень к клику (как простая награда), но не ниже 0
+    # Бонусы за перерождение
     upgrades = user.get("upgrades", {}) or {}
     upgrades["click"] = upgrades.get("click", 0) + reward["click_bonus"]
 
@@ -223,7 +201,7 @@ def perform_rebirth(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     inventory = user.get("inventory", {}) or {}
     inventory["gold_banana"] = inventory.get("gold_banana", 0) + reward["gold_bananas"]
 
-    # Сбросим основные ресурсы, но сохраним некоторые вещи:
+    # Сбрасываем прогресс
     new_bananas = 0
     new_per_second = calculate_per_second(upgrades)
 
@@ -240,7 +218,7 @@ def perform_rebirth(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     if reward["gold_bananas"] > 0:
         reward_text += f", +{reward['gold_bananas']} золотых бананов"
     
-    return True, f"🎉 Перерождение прошло успешно! Это ваше перерождение #{new_rebirths}. Награды: {reward_text}."
+    return True, f"🎉 Перерождение #{new_rebirths} успешно! Награды: {reward_text}."
 
 # ---------- Утилиты для просмотра состояния ----------
 
@@ -269,7 +247,6 @@ def effective_per_second(user: Dict) -> int:
         base = calculate_per_second(upgrades)
     
     multiplier = 1.0
-    # Ивенты влияют и на пассивный доход
     if has_active_event(user):
         multiplier = user.get("event_multiplier", 1.0)
     

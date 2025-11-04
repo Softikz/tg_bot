@@ -12,14 +12,14 @@ BANANA_TYPES = {
         "name": "🍌 Обычный Банан",
         "base_cost": 100,
         "multiplier": 1.5,
-        "duration": 300,  # 5 минут
+        "duration": 300,
         "cost_multiplier": 1.5
     },
     "gold_banana": {
         "name": "✨ Золотой Банан", 
         "base_cost": 500,
         "multiplier": 2.0,
-        "duration": 300,  # 5 минут
+        "duration": 300,
         "cost_multiplier": 1.8
     },
     "crystal_banana": {
@@ -190,6 +190,28 @@ def buy_passive_upgrade(db, user_id: int, user: Dict) -> Tuple[bool, str]:
     db.update_user(user_id, bananas=bananas, upgrades=upgrades, per_second=per_second)
     return True, f"✅ Улучшение сборщика куплено! Уровень: {upgrades['collector']}. Списано: {price} 🍌."
 
+def buy_gold_banana(db, user_id: int, user: Dict) -> Tuple[bool, str]:
+    """
+    Пытается купить золотой банан.
+    """
+    upgrades = user.get("upgrades", {}) or {}
+    gold_level = upgrades.get("gold", 0)
+    price = cost_for_upgrade("gold_banana", gold_level)
+    bananas = user.get("bananas", 0) or 0
+
+    if bananas < price:
+        return False, f"❌ Недостаточно бананов! Нужно {price} 🍌, у вас {bananas} 🍌."
+
+    bananas -= price
+    upgrades["gold"] = gold_level + 1
+    
+    # Добавляем в инвентарь
+    inventory = user.get("inventory", {}) or {}
+    inventory["gold_banana"] = inventory.get("gold_banana", 0) + 1
+    
+    db.update_user(user_id, bananas=bananas, upgrades=upgrades, inventory=inventory)
+    return True, f"✅ Золотой банан куплен! Добавлен в инвентарь. Куплено всего: {upgrades['gold']}. Списано: {price} 🍌."
+
 def buy_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, str]:
     """
     Пытается купить банан указанного типа.
@@ -356,6 +378,11 @@ def get_active_banana_type(user: Dict) -> str:
 def get_active_banana_multiplier(user: Dict) -> float:
     """Возвращает множитель активного банана."""
     return user.get("active_banana_multiplier", 1.0)
+
+def has_active_gold(user: Dict) -> bool:
+    """Проверяет, активен ли золотой банан."""
+    expires = user.get("gold_expires", 0)
+    return expires > current_time()
 
 def has_active_event(user: Dict) -> bool:
     expires = user.get("event_expires", 0)

@@ -180,7 +180,7 @@ def inventory_text(user: Dict) -> str:
         # Показываем текущее активное время если есть
         if has_active_gold(user):
             remaining = int(user.get("gold_expires", 0) - time.time())
-            text += f"   ⏰ Активно: {remaining//60} мин {remaining%60} сек\n\n"
+            text += f"   ⏰ Активно: {remaining//60:02d}:{remaining%60:02d}\n\n"
     
     text += "\n📦 Используй предметы для усиления!"
     
@@ -254,6 +254,46 @@ def login_keyboard():
         [InlineKeyboardButton(text="🔐 Войти в аккаунт", callback_data="login")],
         [InlineKeyboardButton(text="📝 Зарегистрироваться", callback_data="register")]
     ])
+
+# ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ УВЕДОМЛЕНИЙ ==========
+
+async def send_notification_to_user(user_id: int, message: str) -> bool:
+    """
+    Отправляет уведомление конкретному пользователю.
+    Возвращает True если успешно, False если ошибка.
+    """
+    try:
+        from main import bot
+        await bot.send_message(user_id, message)
+        return True
+    except Exception as e:
+        log.warning(f"Не удалось отправить уведомление пользователю {user_id}: {e}")
+        return False
+
+async def send_notification_to_all_users(message: str) -> int:
+    """
+    Отправляет уведомление всем пользователям.
+    Возвращает количество успешно уведомленных пользователей.
+    """
+    try:
+        from main import bot
+        users = db.all_users()
+        notified_count = 0
+        
+        for user in users:
+            try:
+                await bot.send_message(user["user_id"], message)
+                notified_count += 1
+                # Небольшая задержка чтобы не превысить лимиты Telegram
+                await asyncio.sleep(0.1)
+            except Exception as e:
+                log.warning(f"Не удалось отправить уведомление пользователю {user['user_id']}: {e}")
+                continue
+        
+        return notified_count
+    except Exception as e:
+        log.error(f"Ошибка при массовой отправке уведомлений: {e}")
+        return 0
 
 # ========== РЕГИСТРАЦИЯ И АВТОРИЗАЦИЯ ==========
 
@@ -791,15 +831,15 @@ async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
             reply_markup=events_keyboard()
         )
         await callback.answer()
-
-
+        
     elif action == "admin_stop_event":
         # Останавливаем все активные ивенты
+        current_time = time.time()
         users = db.all_users()
         stopped_count = 0
         
         for user in users:
-            if user.get("event_expires", 0) > time.time():
+            if user.get("event_expires", 0) > current_time:
                 db.update_user(
                     user["user_id"],
                     event_expires=0,
@@ -812,32 +852,15 @@ async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
         db.cur.execute("DELETE FROM active_events")
         db.conn.commit()
         
-        # Уведомляем пользователей
-        notified = 0
-        from main import bot
-        
-        for user in users:
-            try:
-                await bot.send_message(
-                    user["user_id"],
-                    "📢 <b>Уведомление от администратора</b>\n\n"
-                    "🎯 <b>Ивент досрочно завершён</b>\n\n"
-                    "Все активные ивенты были остановлены администратором.\n"
-                    "Спасибо за участие! 🍌"
-                )
-                notified += 1
-            except:
-                continue
-        
         await callback.message.edit_text(
             f"✅ Все ивенты остановлены!\n\n"
             f"📊 Статистика:\n"
             f"• Остановлено ивентов: {stopped_count}\n"
-            f"• Уведомлено пользователей: {notified}/{len(users)}",
+            f"• Всего пользователей: {len(users)}",
             reply_markup=admin_keyboard()
         )
         await callback.answer()
-    
+        
     elif action == "admin_new_users":
         users = db.all_users()
         # Сортируем по времени регистрации (последние сначала)
@@ -946,22 +969,12 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
                 current_bananas = user.get("bananas", 0)
                 db.update_user(user["user_id"], bananas=current_bananas + bananas)
             
-            # Красивое уведомление для всех пользователей
-            notified = 0
-            from main import bot
-            
-            for user in users:
-                try:
-                    await bot.send_message(
-                        user["user_id"],
-                        "🎁 <b>Уведомление от администратора</b>\n\n"
-                        f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
-                        f"Теперь ваш баланс: {user.get('bananas', 0) + bananas} бананов!\n"
-                        f"Спасибо за участие в игре! 🎉"
-                    )
-                    notified += 1
-                except:
-                    continue
+            # Асинхронная отправка уведомлений без блокировки
+            notified = await send_notification_to_all_users(
+                f"🎁 <b>Вам начислено {bananas} 🍌!</b>\n\n"
+                f"Администратор выдал всем игрокам бонусные бананы!\n"
+                f"Продолжайте кликать! 🚀"
+            )
             
             await message.answer(
                 f"✅ Успешно выдано {bananas} 🍌 всем {len(users)} пользователям!\n"
@@ -978,22 +991,18 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
             new_balance = current_bananas + bananas
             db.update_user(target_user_id, bananas=new_balance)
             
-            # Уведомляем пользователя
-            try:
-                from main import bot
-                await bot.send_message(
-                    target_user_id,
-                    "🎁 <b>Уведомление от администратора</b>\n\n"
-                    f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
-                    f"Теперь ваш баланс: {new_balance} бананов!\n"
-                    f"Продолжайте в том же духе! 🚀"
-                )
-            except:
-                pass
+            # Пытаемся уведомить пользователя
+            notified = await send_notification_to_user(
+                target_user_id,
+                f"🎁 <b>Вам начислено {bananas} 🍌!</b>\n\n"
+                f"Теперь ваш баланс: {new_balance} бананов!\n"
+                f"Продолжайте в том же духе! 🚀"
+            )
+            
+            status = "📨 Уведомление отправлено" if notified else "⚠️ Уведомление не доставлено"
             
             await message.answer(
-                f"✅ Успешно выдано {bananas} 🍌 пользователю {target_nickname}!\n"
-                f"📨 Уведомление отправлено.",
+                f"✅ Успешно выдано {bananas} 🍌 пользователю {target_nickname}!\n{status}",
                 reply_markup=admin_keyboard()
             )
         
@@ -1019,29 +1028,43 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
             duration_seconds
         )
         
-        # Уведомляем всех пользователей
-        users = db.all_users()
-        notified = 0
-        from main import bot
+        # Форматируем время для красивого отображения
+        hours = duration_seconds // 3600
+        minutes = (duration_seconds % 3600) // 60
         
-        for user in users:
-            try:
-                await bot.send_message(
-                    user["user_id"],
-                    f"🎉 {event_data['name']}!\n\n"
-                    f"⚡ Множитель бананов: x{event_data['multiplier']}\n"
-                    f"⏰ Длительность: {duration_str}\n\n"
-                    f"Успей получить максимум бананов! 🍌"
-                )
-                notified += 1
-            except:
-                continue
+        time_text = ""
+        if hours > 0:
+            time_text += f"{hours} час"
+            if hours > 1 and hours < 5:
+                time_text += "а"
+            elif hours >= 5:
+                time_text += "ов"
+            if minutes > 0:
+                time_text += " "
+        if minutes > 0:
+            time_text += f"{minutes} минут"
+            if minutes == 1:
+                time_text += "у"
+            elif 2 <= minutes <= 4:
+                time_text += "ы"
+        
+        # Асинхронная отправка уведомлений
+        notified = await send_notification_to_all_users(
+            f"🎉 <b>Запущен новый ивент!</b>\n\n"
+            f"📝 <b>{event_data['name']}</b>\n"
+            f"⚡ <b>Множитель: x{event_data['multiplier']}</b>\n"
+            f"⏰ <b>Длительность: {time_text}</b>\n\n"
+            f"Успей получить максимум бананов! 🍌\n"
+            f"Удачи в кликах! 💪"
+        )
+        
+        users = db.all_users()
         
         await message.answer(
             f"✅ Ивент '{event_data['name']}' запущен!\n\n"
             f"📊 Статистика:\n"
             f"• Множитель: x{event_data['multiplier']}\n"
-            f"• Длительность: {duration_str}\n"
+            f"• Длительность: {time_text}\n"
             f"• Уведомлено пользователей: {notified}/{len(users)}",
             reply_markup=admin_keyboard()
         )
@@ -1050,9 +1073,3 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
-
-
-
-
-
-

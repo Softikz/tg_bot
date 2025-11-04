@@ -23,7 +23,11 @@ from game.logic import (
     calculate_per_second,
     parse_event_duration,
     get_rebirth_requirement,
-    get_rebirth_reward
+    get_rebirth_reward,
+    buy_click_upgrade,
+    buy_passive_upgrade,
+    buy_gold_banana,
+    perform_rebirth
 )
 
 router = Router()
@@ -894,4 +898,5 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 

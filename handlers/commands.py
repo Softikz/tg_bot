@@ -734,6 +734,7 @@ async def handle_use_banana(callback: CallbackQuery):
 
 # ========== ОБРАБОТЧИКИ ПОКУПОК ==========
 
+# ОБРАБОТЧИКИ ПОКУПОК - ИСПРАВЛЕННЫЕ
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
     user = db.get_user(callback.from_user.id)
@@ -743,6 +744,7 @@ async def handle_buy_click(callback: CallbackQuery):
         
     user = ensure_and_update_offline(callback.from_user.id)
     
+    # ИСПРАВЛЕНО: передаем только нужные параметры
     success, message = buy_click_upgrade(db, callback.from_user.id, user)
     
     if success:
@@ -761,6 +763,7 @@ async def handle_buy_collector(callback: CallbackQuery):
         
     user = ensure_and_update_offline(callback.from_user.id)
     
+    # ИСПРАВЛЕНО: передаем только нужные параметры
     success, message = buy_passive_upgrade(db, callback.from_user.id, user)
     
     if success:
@@ -1152,4 +1155,5 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 

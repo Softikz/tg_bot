@@ -176,9 +176,23 @@ class DB:
         """, (current_time,))
         self.conn.commit()
 
+    def stop_all_events(self):
+    """
+    Останавливает все активные ивенты.
+    """
+    current_time = time.time()
+    self.cur.execute("""
+        UPDATE users 
+        SET event_expires = 0, event_multiplier = 1.0, event_type = ''
+        WHERE event_expires > ?
+    """, (current_time,))
+    self.cur.execute("DELETE FROM active_events")
+    self.conn.commit()
+    
     # ---------- Служебное ----------
 
     def close(self):
         if hasattr(self, "conn"):
             self.conn.commit()
             self.conn.close()
+

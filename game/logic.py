@@ -75,6 +75,7 @@ BANANA_TYPES = {
 
 CLICK_COST_MULTIPLIER = 1.6
 PASSIVE_COST_MULTIPLIER = 1.7
+GOLD_DURATION = 300
 OFFLINE_CAP_SECONDS = 60 * 60 * 24
 
 # ---------- Вспомогательные функции ----------
@@ -350,7 +351,7 @@ def has_active_banana(user: Dict) -> bool:
 
 def get_active_banana_type(user: Dict) -> str:
     """Возвращает тип активного банана."""
-    return user.get("active_banana_type", "gold_banana")
+    return user.get("active_banana_type", "")
 
 def get_active_banana_multiplier(user: Dict) -> float:
     """Возвращает множитель активного банана."""

@@ -105,15 +105,23 @@ def profile_text(user: Dict) -> str:
     )
     
     boosts = []
+    current_time = time.time()
+    
     if has_active_gold(user):
-        remaining = int(user.get("gold_expires", 0) - time.time())
-        boosts.append(f"✨ Золотой банан (2×) - {remaining} сек")
+        remaining = int(user.get("gold_expires", 0) - current_time)
+        if remaining > 0:
+            min_remaining = remaining // 60
+            sec_remaining = remaining % 60
+            boosts.append(f"✨ Золотой банан (2×) - {min_remaining:02d}:{sec_remaining:02d}")
     
     if has_active_event(user):
-        remaining = int(user.get("event_expires", 0) - time.time())
-        multiplier = user.get("event_multiplier", 1.0)
-        event_type = user.get("event_type", "")
-        boosts.append(f"🎯 {event_type} ({multiplier}×) - {remaining} сек")
+        remaining = int(user.get("event_expires", 0) - current_time)
+        if remaining > 0:
+            min_remaining = remaining // 60
+            sec_remaining = remaining % 60
+            multiplier = user.get("event_multiplier", 1.0)
+            event_type = user.get("event_type", "")
+            boosts.append(f"🎯 {event_type} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
     
     if boosts:
         text += "\n⚡ Активные бусты:\n" + "\n".join(f"• {boost}" for boost in boosts) + "\n"
@@ -973,4 +981,5 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 

@@ -945,8 +945,26 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
                 current_bananas = user.get("bananas", 0)
                 db.update_user(user["user_id"], bananas=current_bananas + bananas)
             
+            # Красивое уведомление для всех пользователей
+            notified = 0
+            from main import bot
+            
+            for user in users:
+                try:
+                    await bot.send_message(
+                        user["user_id"],
+                        "🎁 <b>Уведомление от администратора</b>\n\n"
+                        f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
+                        f"Теперь ваш баланс: {user.get('bananas', 0) + bananas} бананов!\n"
+                        f"Спасибо за участие в игре! 🎉"
+                    )
+                    notified += 1
+                except:
+                    continue
+            
             await message.answer(
-                f"✅ Успешно выдано {bananas} 🍌 всем {len(users)} пользователям!",
+                f"✅ Успешно выдано {bananas} 🍌 всем {len(users)} пользователям!\n"
+                f"📨 Уведомлено: {notified}/{len(users)}",
                 reply_markup=admin_keyboard()
             )
         else:
@@ -956,23 +974,27 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
             
             user = db.get_user(target_user_id)
             current_bananas = user.get("bananas", 0)
-            db.update_user(target_user_id, bananas=current_bananas + bananas)
-            
-            await message.answer(
-                f"✅ Успешно выдано {bananas} 🍌 пользователю {target_nickname}!",
-                reply_markup=admin_keyboard()
-            )
+            new_balance = current_bananas + bananas
+            db.update_user(target_user_id, bananas=new_balance)
             
             # Уведомляем пользователя
             try:
                 from main import bot
                 await bot.send_message(
                     target_user_id,
-                    f"🎁 Администратор выдал вам {bananas} 🍌!\n\n"
-                    f"Теперь у вас: {current_bananas + bananas} бананов"
+                    "🎁 <b>Уведомление от администратора</b>\n\n"
+                    f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
+                    f"Теперь ваш баланс: {new_balance} бананов!\n"
+                    f"Продолжайте в том же духе! 🚀"
                 )
             except:
                 pass
+            
+            await message.answer(
+                f"✅ Успешно выдано {bananas} 🍌 пользователю {target_nickname}!\n"
+                f"📨 Уведомление отправлено.",
+                reply_markup=admin_keyboard()
+            )
         
         await state.clear()
         
@@ -1027,6 +1049,7 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 
 

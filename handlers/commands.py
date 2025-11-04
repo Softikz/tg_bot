@@ -480,6 +480,26 @@ async def handle_click(callback: CallbackQuery):
     
     user = db.get_user(callback.from_user.id)
     
+    # Получаем информацию об активных бустах с оставшимся временем
+    boosts_info = []
+    current_time = time.time()
+    
+    if has_active_gold(user):
+        remaining_gold = int(user.get("gold_expires", 0) - current_time)
+        if remaining_gold > 0:
+            gold_min = remaining_gold // 60
+            gold_sec = remaining_gold % 60
+            boosts_info.append(f"✨ Золотой банан (2×) - {gold_min:02d}:{gold_sec:02d}")
+    
+    if has_active_event(user):
+        remaining_event = int(user.get("event_expires", 0) - current_time)
+        if remaining_event > 0:
+            event_min = remaining_event // 60
+            event_sec = remaining_event % 60
+            multiplier = user.get("event_multiplier", 1.0)
+            event_type = user.get("event_type", "")
+            boosts_info.append(f"🎯 {event_type} ({multiplier}×) - {event_min:02d}:{event_sec:02d}")
+    
     text = (
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
@@ -487,19 +507,8 @@ async def handle_click(callback: CallbackQuery):
         f"Пассив: {user['per_second']}/сек\n"
     )
     
-    boosts = []
-    if has_active_gold(user):
-        remaining = int(user.get("gold_expires", 0) - time.time())
-        boosts.append(f"✨ Золотой банан (2×)")
-    
-    if has_active_event(user):
-        remaining = int(user.get("event_expires", 0) - time.time())
-        multiplier = user.get("event_multiplier", 1.0)
-        event_type = user.get("event_type", "")
-        boosts.append(f"🎯 {event_type} ({multiplier}×)")
-    
-    if boosts:
-        text += "⚡ " + " + ".join(boosts) + "\n"
+    if boosts_info:
+        text += "\n⚡ Активные бусты:\n" + "\n".join(f"• {boost}" for boost in boosts_info) + "\n"
     
     await callback.message.edit_text(text, reply_markup=main_menu_keyboard())
 
@@ -964,3 +973,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

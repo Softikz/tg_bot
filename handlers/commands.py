@@ -607,9 +607,10 @@ async def handle_click(callback: CallbackQuery):
             min_remaining = remaining // 60
             sec_remaining = remaining % 60
             banana_type = get_active_banana_type(user)
-            banana_data = get_banana_data(banana_type)
-            multiplier = get_active_banana_multiplier(user)
-            boosts_info.append(f"{banana_data['name']} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
+            if banana_type:  # ДОБАВЛЕНО: проверка что тип банана не пустой
+                banana_data = get_banana_data(banana_type)
+                multiplier = get_active_banana_multiplier(user)
+                boosts_info.append(f"{banana_data['name']} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
     
     # Ивенты
     if has_active_event(user):
@@ -1155,5 +1156,6 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 

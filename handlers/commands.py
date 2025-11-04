@@ -16,8 +16,7 @@ from game.logic import (
     apply_offline_gain,
     cost_for_upgrade,
     effective_per_click,
-    GOLD_DURATION,
-    has_active_gold,
+    has_active_banana,
     has_active_event,
     calculate_per_click,
     calculate_per_second,
@@ -26,8 +25,13 @@ from game.logic import (
     get_rebirth_reward,
     buy_click_upgrade,
     buy_passive_upgrade,
-    buy_gold_banana,
-    perform_rebirth
+    buy_banana,
+    use_banana,
+    perform_rebirth,
+    get_banana_data,
+    get_active_banana_type,
+    get_active_banana_multiplier,
+    BANANA_TYPES
 )
 
 router = Router()
@@ -105,17 +109,22 @@ def profile_text(user: Dict) -> str:
     )
     
     boosts = []
-    current_time = time.time()
+    current_time_val = time.time()
     
-    if has_active_gold(user):
-        remaining = int(user.get("gold_expires", 0) - current_time)
+    # Активный банан
+    if has_active_banana(user):
+        remaining = int(user.get("gold_expires", 0) - current_time_val)
         if remaining > 0:
             min_remaining = remaining // 60
             sec_remaining = remaining % 60
-            boosts.append(f"✨ Золотой банан (2×) - {min_remaining:02d}:{sec_remaining:02d}")
+            banana_type = get_active_banana_type(user)
+            banana_data = get_banana_data(banana_type)
+            multiplier = get_active_banana_multiplier(user)
+            boosts.append(f"{banana_data['name']} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
     
+    # Ивенты
     if has_active_event(user):
-        remaining = int(user.get("event_expires", 0) - current_time)
+        remaining = int(user.get("event_expires", 0) - current_time_val)
         if remaining > 0:
             min_remaining = remaining // 60
             sec_remaining = remaining % 60
@@ -132,23 +141,29 @@ def profile_text(user: Dict) -> str:
     text += f"\n📊 Улучшения:\n"
     text += f"• Клик: уровень {upgrades.get('click', 0)}\n"
     text += f"• Сборщик: уровень {upgrades.get('collector', 0)}\n"
-    text += f"• Золотых бананов куплено: {upgrades.get('gold', 0)}\n"
+    
+    # Показываем купленные бананы
+    banana_counts = {}
+    for banana_type in BANANA_TYPES:
+        level_key = f"{banana_type}_level"
+        banana_counts[banana_type] = upgrades.get(level_key, 0)
+    
+    text += f"\n🍌 Куплено бананов:\n"
+    for banana_type, count in banana_counts.items():
+        if count > 0:
+            banana_data = BANANA_TYPES[banana_type]
+            text += f"• {banana_data['name']}: {count}\n"
     
     return text
 
 def shop_text(user: Dict) -> str:
     upgrades = user.get("upgrades", {})
-    inventory = user.get("inventory", {})
     
     click_level = upgrades.get("click", 0)
     collector_level = upgrades.get("collector", 0)
-    gold_level = upgrades.get("gold", 0)
     
     click_cost = cost_for_upgrade("click", click_level)
     collector_cost = cost_for_upgrade("collector", collector_level)
-    gold_cost = cost_for_upgrade("gold", gold_level)
-    
-    gold_in_inventory = inventory.get("gold_banana", 0)
     
     return (
         f"🛒 Магазин улучшений\n\n"
@@ -157,40 +172,109 @@ def shop_text(user: Dict) -> str:
         f"💵 Стоимость: {click_cost} 🍌\n\n"
         f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
         f"💵 Стоимость: {collector_cost} 🍌\n\n"
-        f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level}, в инвентаре: {gold_in_inventory})\n"
-        f"💵 Стоимость: {gold_cost} 🍌\n"
-        f"⚡ Эффект: x2 к кликам на {GOLD_DURATION} секунд\n"
-        f"📦 Добавляется в инвентарь, а не активируется сразу!"
+        f"3️⃣ 🍌 Магазин бананов\n"
+        f"💵 Разные бананы с множителями от 1.5× до 30×!\n"
+        f"📦 Добавляются в инвентарь, активируются отдельно!"
     )
+)
+
+# Функции для работы с магазином бананов
+def banana_shop_text(user: Dict) -> str:
+    text = "🛒 Магазин бананов\n\n"
+    text += f"💰 Баланс: {int(user['bananas'])} 🍌\n\n"
+    
+    inventory = user.get("inventory", {})
+    upgrades = user.get("upgrades", {})
+    
+    for banana_type, banana_data in BANANA_TYPES.items():
+        level_key = f"{banana_type}_level"
+        level = upgrades.get(level_key, 0)
+        cost = cost_for_upgrade(banana_type, level)
+        in_inventory = inventory.get(banana_type, 0)
+        
+        text += f"{banana_data['name']} ({banana_data['multiplier']}×)\n"
+        text += f"💵 Стоимость: {cost} 🍌\n"
+        text += f"📦 В инвентаре: {in_inventory}\n"
+        text += f"⏰ Длительность: {banana_data['duration']//60} мин\n"
+        text += f"🛒 Куплено: {level}\n\n"
+    
+    text += "💡 Бананы добавляются в инвентарь и активируются отдельно!"
+    return text
+
+def banana_shop_keyboard():
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    
+    # Добавляем кнопки для каждого типа банана
+    for banana_type, banana_data in BANANA_TYPES.items():
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(
+                text=f"{banana_data['name']} ({banana_data['multiplier']}×)", 
+                callback_data=f"buy_{banana_type}"
+            )
+        ])
+    
+    # Кнопки навигации
+    keyboard.inline_keyboard.extend([
+        [InlineKeyboardButton(text="🎒 Инвентарь", callback_data="inventory")],
+        [InlineKeyboardButton(text="⬅ Назад в магазин", callback_data="shop")]
+    ])
+    
+    return keyboard
 
 def inventory_text(user: Dict) -> str:
     inventory = user.get("inventory", {})
     
     if not inventory:
-        return "🎒 Инвентарь пуст\n\nКупи Золотые Бананы в магазине или получи их за перерождения!"
+        return "🎒 Инвентарь пуст\n\nКупи бананы в магазине или получи их за перерождения!"
     
     text = "🎒 Твой инвентарь:\n\n"
     
-    gold_bananas = inventory.get("gold_banana", 0)
-    if gold_bananas > 0:
-        text += f"✨ Золотой Банан: {gold_bananas} шт.\n"
-        text += f"   ⚡ Эффект: x2 к кликам на 5 минут\n"
-        text += f"   💡 Использование: +5 минут за каждый банан\n\n"
-        
-        # Показываем текущее активное время если есть
-        if has_active_gold(user):
-            remaining = int(user.get("gold_expires", 0) - time.time())
-            text += f"   ⏰ Активно: {remaining//60:02d}:{remaining%60:02d}\n\n"
+    # Показываем активный банан если есть
+    if has_active_banana(user):
+        remaining = int(user.get("gold_expires", 0) - time.time())
+        banana_type = get_active_banana_type(user)
+        banana_data = get_banana_data(banana_type)
+        multiplier = get_active_banana_multiplier(user)
+        text += f"⚡ Активный банан: {banana_data['name']} ({multiplier}×)\n"
+        text += f"   ⏰ Осталось: {remaining//60:02d}:{remaining%60:02d}\n\n"
     
-    text += "\n📦 Используй предметы для усиления!"
+    # Показываем все бананы в инвентаре
+    for banana_type, banana_data in BANANA_TYPES.items():
+        count = inventory.get(banana_type, 0)
+        if count > 0:
+            text += f"{banana_data['name']}: {count} шт.\n"
+            text += f"   ⚡ Множитель: {banana_data['multiplier']}×\n"
+            text += f"   ⏰ Длительность: {banana_data['duration']//60} мин\n\n"
     
+    text += "📦 Используй бананы для усиления кликов!"
     return text
+
+def inventory_keyboard(user: Dict):
+    inventory = user.get("inventory", {})
+    
+    buttons = []
+    
+    # Кнопки для использования бананов
+    for banana_type, banana_data in BANANA_TYPES.items():
+        count = inventory.get(banana_type, 0)
+        if count > 0:
+            buttons.append([InlineKeyboardButton(
+                text=f"⚡ Использовать {banana_data['name']} (есть: {count})", 
+                callback_data=f"use_{banana_type}"
+            )])
+    
+    buttons.extend([
+        [InlineKeyboardButton(text="🛒 Магазин бананов", callback_data="banana_shop")],
+        [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def shop_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🖱 Улучшить клик", callback_data="buy_click")],
         [InlineKeyboardButton(text="⚙️ Улучшить сборщик", callback_data="buy_collector")],
-        [InlineKeyboardButton(text="✨ Купить золотой банан", callback_data="buy_gold")],
+        [InlineKeyboardButton(text="🍌 Магазин бананов", callback_data="banana_shop")],
         [InlineKeyboardButton(text="🎒 Инвентарь", callback_data="inventory")],
         [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
     ])
@@ -203,22 +287,6 @@ def main_menu_keyboard():
          InlineKeyboardButton(text="🎒 Инвентарь", callback_data="inventory")],
         [InlineKeyboardButton(text="🔁 Перерождение", callback_data="rebirth")]
     ])
-
-def inventory_keyboard(user: Dict):
-    inventory = user.get("inventory", {})
-    gold_bananas = inventory.get("gold_banana", 0)
-    
-    buttons = []
-    if gold_bananas > 0:
-        buttons.append([InlineKeyboardButton(
-            text=f"✨ Использовать Золотой Банан (есть: {gold_bananas})", 
-            callback_data="use_gold_banana"
-        )])
-    
-    buttons.append([InlineKeyboardButton(text="🛒 Магазин", callback_data="shop")])
-    buttons.append([InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def admin_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -263,7 +331,7 @@ async def send_notification_to_user(user_id: int, message: str) -> bool:
     Возвращает True если успешно, False если ошибка.
     """
     try:
-        from main import bot
+        from bot_instance import bot
         await bot.send_message(user_id, message)
         return True
     except Exception as e:
@@ -276,7 +344,7 @@ async def send_notification_to_all_users(message: str) -> int:
     Возвращает количество успешно уведомленных пользователей.
     """
     try:
-        from main import bot
+        from bot_instance import bot
         users = db.all_users()
         notified_count = 0
         
@@ -384,7 +452,7 @@ async def process_registration_password(message: types.Message, state: FSMContex
     
     # Уведомляем админа о новой регистрации
     try:
-        from main import bot
+        from bot_instance import bot
         await bot.send_message(
             ADMIN_ID,
             f"🆕 Новая регистрация!\n"
@@ -531,23 +599,28 @@ async def handle_click(callback: CallbackQuery):
     
     # Получаем информацию об активных бустах с оставшимся временем
     boosts_info = []
-    current_time = time.time()
+    current_time_val = time.time()
     
-    if has_active_gold(user):
-        remaining_gold = int(user.get("gold_expires", 0) - current_time)
-        if remaining_gold > 0:
-            gold_min = remaining_gold // 60
-            gold_sec = remaining_gold % 60
-            boosts_info.append(f"✨ Золотой банан (2×) - {gold_min:02d}:{gold_sec:02d}")
+    # Активный банан
+    if has_active_banana(user):
+        remaining = int(user.get("gold_expires", 0) - current_time_val)
+        if remaining > 0:
+            min_remaining = remaining // 60
+            sec_remaining = remaining % 60
+            banana_type = get_active_banana_type(user)
+            banana_data = get_banana_data(banana_type)
+            multiplier = get_active_banana_multiplier(user)
+            boosts_info.append(f"{banana_data['name']} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
     
+    # Ивенты
     if has_active_event(user):
-        remaining_event = int(user.get("event_expires", 0) - current_time)
-        if remaining_event > 0:
-            event_min = remaining_event // 60
-            event_sec = remaining_event % 60
+        remaining = int(user.get("event_expires", 0) - current_time_val)
+        if remaining > 0:
+            min_remaining = remaining // 60
+            sec_remaining = remaining % 60
             multiplier = user.get("event_multiplier", 1.0)
             event_type = user.get("event_type", "")
-            boosts_info.append(f"🎯 {event_type} ({multiplier}×) - {event_min:02d}:{event_sec:02d}")
+            boosts_info.append(f"🎯 {event_type} ({multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}")
     
     text = (
         f"🍌 Клик! +{per_click}\n\n"
@@ -599,8 +672,26 @@ async def handle_back_to_main(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text("🏠 Главное меню", reply_markup=main_menu_keyboard())
 
-@router.callback_query(F.data == "use_gold_banana")
-async def handle_use_gold_banana(callback: CallbackQuery):
+@router.callback_query(F.data == "banana_shop")
+async def handle_banana_shop(callback: CallbackQuery):
+    await callback.answer()
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не авторизованы!", show_alert=True)
+        return
+        
+    user = ensure_and_update_offline(callback.from_user.id)
+    await callback.message.edit_text(banana_shop_text(user), reply_markup=banana_shop_keyboard())
+
+# Обработчики покупки бананов
+@router.callback_query(F.data.startswith("buy_"))
+async def handle_buy_banana(callback: CallbackQuery):
+    banana_type = callback.data.replace("buy_", "")
+    
+    if banana_type not in BANANA_TYPES:
+        await callback.answer("❌ Неизвестный тип банана!", show_alert=True)
+        return
+        
     user = db.get_user(callback.from_user.id)
     if not user:
         await callback.answer("❌ Вы не авторизованы!", show_alert=True)
@@ -608,35 +699,39 @@ async def handle_use_gold_banana(callback: CallbackQuery):
         
     user = ensure_and_update_offline(callback.from_user.id)
     
-    # Используем один золотой банан из инвентаря
-    if db.use_from_inventory(callback.from_user.id, "gold_banana", 1):
-        # Активируем золотой банан - увеличиваем время
-        current_expires = user.get("gold_expires", 0)
-        current_time = time.time()
+    success, message = buy_banana(db, callback.from_user.id, user, banana_type)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        user = ensure_and_update_offline(callback.from_user.id)
+        await callback.message.edit_text(banana_shop_text(user), reply_markup=banana_shop_keyboard())
+    else:
+        await callback.answer(message, show_alert=True)
+
+# Обработчики использования бананов
+@router.callback_query(F.data.startswith("use_"))
+async def handle_use_banana(callback: CallbackQuery):
+    banana_type = callback.data.replace("use_", "")
+    
+    if banana_type not in BANANA_TYPES:
+        await callback.answer("❌ Неизвестный тип банана!", show_alert=True)
+        return
         
-        # Если текущее время истекло, начинаем с текущего момента
-        if current_expires < current_time:
-            new_expires = current_time + GOLD_DURATION
-        else:
-            # Иначе добавляем к существующему времени
-            new_expires = current_expires + GOLD_DURATION
+    user = db.get_user(callback.from_user.id)
+    if not user:
+        await callback.answer("❌ Вы не авторизованы!", show_alert=True)
+        return
         
-        db.update_user(callback.from_user.id, gold_expires=new_expires)
-        
-        remaining = db.get_inventory(callback.from_user.id).get("gold_banana", 0)
-        remaining_time = int(new_expires - current_time)
-        
-        await callback.answer(
-            f"✅ Золотой банан активирован! +5 минут буста.\n"
-            f"⏰ Общее время: {remaining_time//60:02d}:{remaining_time%60:02d}\n"
-            f"📦 Осталось в инвентаре: {remaining}", 
-            show_alert=True
-        )
-        
-        user = db.get_user(callback.from_user.id)
+    user = ensure_and_update_offline(callback.from_user.id)
+    
+    success, message = use_banana(db, callback.from_user.id, user, banana_type)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        user = ensure_and_update_offline(callback.from_user.id)
         await callback.message.edit_text(inventory_text(user), reply_markup=inventory_keyboard(user))
     else:
-        await callback.answer("❌ Нет золотых бананов в инвентаре!", show_alert=True)
+        await callback.answer(message, show_alert=True)
 
 # ========== ОБРАБОТЧИКИ ПОКУПОК ==========
 
@@ -668,24 +763,6 @@ async def handle_buy_collector(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id)
     
     success, message = buy_passive_upgrade(db, callback.from_user.id, user)
-    
-    if success:
-        await callback.answer(message, show_alert=True)
-        user = ensure_and_update_offline(callback.from_user.id)
-        await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
-    else:
-        await callback.answer(message, show_alert=True)
-
-@router.callback_query(F.data == "buy_gold")
-async def handle_buy_gold(callback: CallbackQuery):
-    user = db.get_user(callback.from_user.id)
-    if not user:
-        await callback.answer("❌ Вы не авторизованы!", show_alert=True)
-        return
-        
-    user = ensure_and_update_offline(callback.from_user.id)
-    
-    success, message = buy_gold_banana(db, callback.from_user.id, user)
     
     if success:
         await callback.answer(message, show_alert=True)
@@ -834,12 +911,12 @@ async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
         
     elif action == "admin_stop_event":
         # Останавливаем все активные ивенты
-        current_time = time.time()
+        current_time_val = time.time()
         users = db.all_users()
         stopped_count = 0
         
         for user in users:
-            if user.get("event_expires", 0) > current_time:
+            if user.get("event_expires", 0) > current_time_val:
                 db.update_user(
                     user["user_id"],
                     event_expires=0,
@@ -971,9 +1048,10 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
             
             # Асинхронная отправка уведомлений без блокировки
             notified = await send_notification_to_all_users(
-                f"🎁 <b>Вам начислено {bananas} 🍌!</b>\n\n"
+                f"🎁 <b>Уведомление от администратора</b>\n\n"
+                f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
                 f"Администратор выдал всем игрокам бонусные бананы!\n"
-                f"Продолжайте кликать! 🚀"
+                f"Продолжайте кликать и развиваться! 🚀"
             )
             
             await message.answer(
@@ -994,7 +1072,8 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
             # Пытаемся уведомить пользователя
             notified = await send_notification_to_user(
                 target_user_id,
-                f"🎁 <b>Вам начислено {bananas} 🍌!</b>\n\n"
+                f"🎁 <b>Уведомление от администратора</b>\n\n"
+                f"💝 <b>Вам начислено: {bananas} 🍌</b>\n\n"
                 f"Теперь ваш баланс: {new_balance} бананов!\n"
                 f"Продолжайте в том же духе! 🚀"
             )
@@ -1050,7 +1129,8 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
         # Асинхронная отправка уведомлений
         notified = await send_notification_to_all_users(
-            f"🎉 <b>Запущен новый ивент!</b>\n\n"
+            f"🎉 <b>Уведомление от администратора</b>\n\n"
+            f"🚀 <b>Запущен новый ивент!</b>\n\n"
             f"📝 <b>{event_data['name']}</b>\n"
             f"⚡ <b>Множитель: x{event_data['multiplier']}</b>\n"
             f"⏰ <b>Длительность: {time_text}</b>\n\n"

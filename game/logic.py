@@ -31,43 +31,43 @@ BANANA_TYPES = {
     },
     "emerald_banana": {
         "name": "💚 Изумрудный Банан", 
-        "base_cost": 4000,
+        "base_cost": 3000,
         "multiplier": 4.0,
         "duration": 300,
         "cost_multiplier": 2.2
     },
     "ruby_banana": {
         "name": "❤️ Рубиновый Банан",
-        "base_cost": 10000, 
+        "base_cost": 6000, 
         "multiplier": 5.0,
         "duration": 300,
         "cost_multiplier": 2.5
     },
     "diamond_banana": {
         "name": "🔷 Алмазный Банан",
-        "base_cost": 25000,
-        "multiplier": 6.0, 
+        "base_cost": 13000,
+        "multiplier": 7.0, 
         "duration": 300,
         "cost_multiplier": 3.0
     },
     "cosmic_banana": {
         "name": "🌌 Космический Банан",
-        "base_cost": 60000,
-        "multiplier": 7.0,
+        "base_cost": 50000,
+        "multiplier": 10.0,
         "duration": 300,
         "cost_multiplier": 3.5
     },
     "mythical_banana": {
         "name": "🐉 Мифический Банан", 
-        "base_cost": 150000,
-        "multiplier": 8.0,
+        "base_cost": 100000,
+        "multiplier": 15.0,
         "duration": 300,
         "cost_multiplier": 4.0
     },
     "godly_banana": {
         "name": "👑 Божественный Банан",
-        "base_cost": 500000, 
-        "multiplier": 10.0,
+        "base_cost": 250000, 
+        "multiplier": 30.0,
         "duration": 300,
         "cost_multiplier": 5.0
     }

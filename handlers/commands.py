@@ -580,7 +580,8 @@ async def handle_use_gold_banana(callback: CallbackQuery):
     else:
         await callback.answer("❌ Нет золотых бананов в инвентаре!", show_alert=True)
 
-# Покупки улучшений (аналогично обновляем вызовы ensure_and_update_offline)
+# ========== ОБРАБОТЧИКИ ПОКУПОК ==========
+
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):
     user = db.get_user(callback.from_user.id)
@@ -589,7 +590,15 @@ async def handle_buy_click(callback: CallbackQuery):
         return
         
     user = ensure_and_update_offline(callback.from_user.id)
-    # ... остальной код без изменений ...
+    
+    success, message = buy_click_upgrade(db, callback.from_user.id, user)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        user = ensure_and_update_offline(callback.from_user.id)
+        await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
+    else:
+        await callback.answer(message, show_alert=True)
 
 @router.callback_query(F.data == "buy_collector")
 async def handle_buy_collector(callback: CallbackQuery):
@@ -599,7 +608,15 @@ async def handle_buy_collector(callback: CallbackQuery):
         return
         
     user = ensure_and_update_offline(callback.from_user.id)
-    # ... остальной код без изменений ...
+    
+    success, message = buy_passive_upgrade(db, callback.from_user.id, user)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        user = ensure_and_update_offline(callback.from_user.id)
+        await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
+    else:
+        await callback.answer(message, show_alert=True)
 
 @router.callback_query(F.data == "buy_gold")
 async def handle_buy_gold(callback: CallbackQuery):
@@ -609,9 +626,17 @@ async def handle_buy_gold(callback: CallbackQuery):
         return
         
     user = ensure_and_update_offline(callback.from_user.id)
-    # ... остальной код без изменений ...
+    
+    success, message = buy_gold_banana(db, callback.from_user.id, user)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        user = ensure_and_update_offline(callback.from_user.id)
+        await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
+    else:
+        await callback.answer(message, show_alert=True)
 
-# ========== ПЕРЕРОЖДЕНИЕ ==========
+# ========== ОБРАБОТЧИК ПЕРЕРОЖДЕНИЯ ==========
 
 @router.callback_query(F.data == "rebirth")
 async def handle_rebirth(callback: CallbackQuery):
@@ -622,7 +647,34 @@ async def handle_rebirth(callback: CallbackQuery):
         return
         
     user = ensure_and_update_offline(callback.from_user.id)
-    # ... остальной код без изменений ...
+    
+    rebirths = user.get('rebirths', 0)
+    requirement = get_rebirth_requirement(rebirths)
+    
+    rebirth_text = (
+        f"🔁 Перерождение\n\n"
+        f"При перерождении:\n"
+        f"• Сбросятся бананы и улучшения\n"
+        f"• Вы получите бонусы за перерождение\n"
+        f"• Начнёте с начала, но сильнее!\n\n"
+        f"Требуется: {requirement} 🍌\n"
+        f"У вас: {int(user['bananas'])} 🍌\n"
+        f"Ваши перерождения: {rebirths}\n\n"
+    )
+    
+    if user['bananas'] >= requirement:
+        rebirth_text += "✅ Вы можете переродиться!"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Подтвердить перерождение", callback_data="confirm_rebirth")],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_main")]
+        ])
+    else:
+        rebirth_text += f"❌ Недостаточно бананов для перерождения"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
+        ])
+    
+    await callback.message.edit_text(rebirth_text, reply_markup=keyboard)
 
 @router.callback_query(F.data == "confirm_rebirth")
 async def handle_confirm_rebirth(callback: CallbackQuery):
@@ -632,7 +684,21 @@ async def handle_confirm_rebirth(callback: CallbackQuery):
         return
         
     user = ensure_and_update_offline(callback.from_user.id)
-    # ... остальной код без изменений ...
+    
+    success, message = perform_rebirth(db, callback.from_user.id, user)
+    
+    if success:
+        await callback.answer(message, show_alert=True)
+        await callback.message.edit_text(
+            f"🎉 Перерождение завершено!\n\n{message}",
+            reply_markup=main_menu_keyboard()
+        )
+    else:
+        await callback.answer(message, show_alert=True)
+        await callback.message.edit_text(
+            f"❌ Не удалось выполнить перерождение\n\n{message}",
+            reply_markup=main_menu_keyboard()
+        )
 
 # ========== АДМИН ОБРАБОТЧИКИ ==========
 
@@ -898,5 +964,3 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
-
-

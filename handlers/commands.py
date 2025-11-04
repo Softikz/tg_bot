@@ -13,13 +13,14 @@ db = DB()  # локальный экземпляр БД для обработч�
 
 # ---- UI ----
 def main_keyboard(user_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton(text="🖱️ Клик", callback_data="click"),
-        InlineKeyboardButton(text="🛒 Магазин", callback_data="shop")
-    )
-    kb.add(InlineKeyboardButton(text="♻️ Перерождение", callback_data="rebirth"))
-    return kb
+    keyboard = [
+        [
+            InlineKeyboardButton(text="🖱️ Клик", callback_data="click"),
+            InlineKeyboardButton(text="🛒 Магазин", callback_data="shop")
+        ],
+        [InlineKeyboardButton(text="♻️ Перерождение", callback_data="rebirth")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 def shop_keyboard(user_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardMarkup(row_width=1)
@@ -151,3 +152,4 @@ async def handle_rebirth(callback: CallbackQuery):
         f"Перерождений: {user.get('rebirths',0)}",
         reply_markup=main_keyboard(user_id)
     )
+

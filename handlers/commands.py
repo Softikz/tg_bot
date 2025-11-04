@@ -790,7 +790,53 @@ async def handle_admin_commands(callback: CallbackQuery, state: FSMContext):
             reply_markup=events_keyboard()
         )
         await callback.answer()
+
+
+    elif action == "admin_stop_event":
+        # Останавливаем все активные ивенты
+        users = db.all_users()
+        stopped_count = 0
         
+        for user in users:
+            if user.get("event_expires", 0) > time.time():
+                db.update_user(
+                    user["user_id"],
+                    event_expires=0,
+                    event_multiplier=1.0,
+                    event_type=""
+                )
+                stopped_count += 1
+        
+        # Очищаем активные ивенты из таблицы
+        db.cur.execute("DELETE FROM active_events")
+        db.conn.commit()
+        
+        # Уведомляем пользователей
+        notified = 0
+        from main import bot
+        
+        for user in users:
+            try:
+                await bot.send_message(
+                    user["user_id"],
+                    "📢 <b>Уведомление от администратора</b>\n\n"
+                    "🎯 <b>Ивент досрочно завершён</b>\n\n"
+                    "Все активные ивенты были остановлены администратором.\n"
+                    "Спасибо за участие! 🍌"
+                )
+                notified += 1
+            except:
+                continue
+        
+        await callback.message.edit_text(
+            f"✅ Все ивенты остановлены!\n\n"
+            f"📊 Статистика:\n"
+            f"• Остановлено ивентов: {stopped_count}\n"
+            f"• Уведомлено пользователей: {notified}/{len(users)}",
+            reply_markup=admin_keyboard()
+        )
+        await callback.answer()
+    
     elif action == "admin_new_users":
         users = db.all_users()
         # Сортируем по времени регистрации (последние сначала)
@@ -981,6 +1027,7 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 
 

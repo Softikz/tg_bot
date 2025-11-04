@@ -197,3 +197,4 @@ class DB:  # ← ИЗМЕНИЛ НА БОЛЬШУЮ БУКВУ
         if hasattr(self, "conn"):
             self.conn.commit()
             self.conn.close()
+

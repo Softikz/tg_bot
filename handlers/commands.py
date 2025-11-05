@@ -26,7 +26,6 @@ from game.logic import (
     get_rebirth_reward,
     buy_click_upgrade,
     buy_passive_upgrade,
-    buy_gold_banana,
     buy_banana,
     use_banana,
     perform_rebirth,
@@ -162,17 +161,12 @@ def profile_text(user: Dict) -> str:
 
 def shop_text(user: Dict) -> str:
     upgrades = user.get("upgrades", {})
-    inventory = user.get("inventory", {})
     
     click_level = upgrades.get("click", 0)
     collector_level = upgrades.get("collector", 0)
-    gold_level = upgrades.get("gold", 0)
     
     click_cost = cost_for_upgrade("click", click_level)
     collector_cost = cost_for_upgrade("collector", collector_level)
-    gold_cost = cost_for_upgrade("gold_banana", gold_level)
-    
-    gold_in_inventory = inventory.get("gold_banana", 0)
     
     return (
         f"🛒 Магазин улучшений\n\n"
@@ -181,11 +175,9 @@ def shop_text(user: Dict) -> str:
         f"💵 Стоимость: {click_cost} 🍌\n\n"
         f"2️⃣ Улучшить сборщик (уровень {collector_level}) → +1 банан/сек\n"
         f"💵 Стоимость: {collector_cost} 🍌\n\n"
-        f"3️⃣ Купить Золотой Банан ✨ (куплено: {gold_level}, в инвентаре: {gold_in_inventory})\n"
-        f"💵 Стоимость: {gold_cost} 🍌\n"
-        f"⚡ Эффект: x2 к кликам на {GOLD_DURATION} секунд\n\n"
-        f"4️⃣ 🍌 Магазин бананов\n"
-        f"💵 Разные бананы с множителями от 1.5× до 30×!"
+        f"3️⃣ 🍌 Магазин бананов\n"
+        f"💵 Разные бананы с множителями от 1.5× до 30×!\n"
+        f"📦 Добавляются в инвентарь, активируются отдельно!"
     )
 
 # Функции для работы с магазином бананов
@@ -211,17 +203,14 @@ def banana_shop_text(user: Dict) -> str:
     text += "💡 Бананы добавляются в инвентарь и активируются отдельно!"
     return text
 
-def banana_shop_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
-    
-    # Добавляем кнопки для каждого типа банана
-    for banana_type, banana_data in BANANA_TYPES.items():
-        keyboard.inline_keyboard.append([
-            InlineKeyboardButton(
-                text=f"{banana_data['name']} ({banana_data['multiplier']}×)", 
-                callback_data=f"buy_{banana_type}"
-            )
-        ])
+def shop_keyboard():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🖱 Улучшить клик", callback_data="buy_click")],
+        [InlineKeyboardButton(text="⚙️ Улучшить сборщик", callback_data="buy_collector")],
+        [InlineKeyboardButton(text="🍌 Магазин бананов", callback_data="banana_shop")],
+        [InlineKeyboardButton(text="🎒 Инвентарь", callback_data="inventory")],
+        [InlineKeyboardButton(text="⬅ Назад в меню", callback_data="back_to_main")]
+    ])
     
     # Кнопки навигации
     keyboard.inline_keyboard.extend([
@@ -775,24 +764,6 @@ async def handle_buy_collector(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id)
     
     success, message = buy_passive_upgrade(db, callback.from_user.id, user)
-    
-    if success:
-        await callback.answer(message, show_alert=True)
-        user = ensure_and_update_offline(callback.from_user.id)
-        await callback.message.edit_text(shop_text(user), reply_markup=shop_keyboard())
-    else:
-        await callback.answer(message, show_alert=True)
-
-@router.callback_query(F.data == "buy_gold")
-async def handle_buy_gold(callback: CallbackQuery):
-    user = db.get_user(callback.from_user.id)
-    if not user:
-        await callback.answer("❌ Вы не авторизованы!", show_alert=True)
-        return
-        
-    user = ensure_and_update_offline(callback.from_user.id)
-    
-    success, message = buy_gold_banana(db, callback.from_user.id, user)
     
     if success:
         await callback.answer(message, show_alert=True)
@@ -2371,3 +2342,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

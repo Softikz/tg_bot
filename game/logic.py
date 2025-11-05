@@ -237,6 +237,8 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
     
     # Используем банан из инвентаря
     inventory[banana_type] -= 1
+    if inventory[banana_type] <= 0:
+        del inventory[banana_type]
     
     # Активируем банан - устанавливаем время окончания
     current_time_val = current_time()

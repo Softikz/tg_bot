@@ -266,8 +266,9 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
         return False, f"❌ Нет {banana_data['name']} в инвентаре!"
     
     # Используем банан из инвентаря
-    if not db.use_from_inventory(user_id, banana_type, 1):
-        return False, f"❌ Не удалось использовать {banana_data['name']}!"
+    inventory[banana_type] -= 1
+    if inventory[banana_type] <= 0:
+        del inventory[banana_type]
     
     # Активируем банан - увеличиваем время
     current_expires = user.get("gold_expires", 0)
@@ -280,15 +281,16 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
         # Иначе добавляем к существующему времени
         new_expires = current_expires + banana_data["duration"]
     
-    # Сохраняем тип активного банана и множитель
+    # Сохраняем все изменения сразу
     db.update_user(
         user_id, 
+        inventory=inventory,
         gold_expires=new_expires,
         active_banana_type=banana_type,
         active_banana_multiplier=banana_data["multiplier"]
     )
     
-    remaining = db.get_inventory(user_id).get(banana_type, 0)
+    remaining = inventory.get(banana_type, 0)
     remaining_time = int(new_expires - current_time_val)
     
     return True, (
@@ -778,4 +780,5 @@ def parse_event_duration(duration_str: str) -> int:
         return hours * 3600 + minutes * 60
     except ValueError as e:
         raise ValueError(f"Ошибка парсинга времени: {str(e)}")
+
 

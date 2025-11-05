@@ -27,6 +27,7 @@ from game.logic import (
     buy_click_upgrade,
     buy_passive_upgrade,
     buy_banana,
+    buy_gold_banana,
     use_banana,
     perform_rebirth,
     get_banana_data,
@@ -2342,4 +2343,5 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 

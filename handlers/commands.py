@@ -229,14 +229,20 @@ def inventory_text(user: Dict) -> str:
     
     text = "🎒 Твой инвентарь:\n\n"
     
-    # Показываем активный банан если есть
+    # Показываем активный банан если есть (с проверкой на существование типа)
     if has_active_banana(user):
         remaining = int(user.get("gold_expires", 0) - time.time())
         banana_type = get_active_banana_type(user)
-        banana_data = get_banana_data(banana_type)
-        multiplier = get_active_banana_multiplier(user)
-        text += f"⚡ Активный банан: {banana_data['name']} ({multiplier}×)\n"
-        text += f"   ⏰ Осталось: {remaining//60:02d}:{remaining%60:02d}\n\n"
+        # ПРОВЕРЯЕМ что тип банана существует и есть в BANANA_TYPES
+        if banana_type and banana_type in BANANA_TYPES:
+            banana_data = get_banana_data(banana_type)
+            multiplier = get_active_banana_multiplier(user)
+            text += f"⚡ Активный банан: {banana_data['name']} ({multiplier}×)\n"
+            text += f"   ⏰ Осталось: {remaining//60:02d}:{remaining%60:02d}\n\n"
+        else:
+            # Если тип банана не найден, показываем общую информацию
+            text += f"⚡ Активный банан: множитель {get_active_banana_multiplier(user)}×\n"
+            text += f"   ⏰ Осталось: {remaining//60:02d}:{remaining%60:02d}\n\n"
     
     # Показываем все бананы в инвентаре
     for banana_type, banana_data in BANANA_TYPES.items():
@@ -1157,5 +1163,6 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+
 
 

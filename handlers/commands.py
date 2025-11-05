@@ -209,7 +209,7 @@ def banana_shop_keyboard():
         keyboard.inline_keyboard.append([
             InlineKeyboardButton(
                 text=f"{banana_data['name']} ({banana_data['multiplier']}×)", 
-                callback_data=f"buy_{banana_type}"
+                callback_data=f"buy_banana_{banana_type}"
             )
         ])
     
@@ -260,7 +260,7 @@ def inventory_keyboard(user: Dict):
         if count > 0:
             buttons.append([InlineKeyboardButton(
                 text=f"⚡ Использовать {banana_data['name']} (есть: {count})", 
-                callback_data=f"use_{banana_type}"
+                callback_data=f"use_banana_{banana_type}"
             )])
     
     buttons.extend([
@@ -684,10 +684,10 @@ async def handle_banana_shop(callback: CallbackQuery):
     user = ensure_and_update_offline(callback.from_user.id)
     await callback.message.edit_text(banana_shop_text(user), reply_markup=banana_shop_keyboard())
 
-# Обработчики покупки бананов
-@router.callback_query(F.data.startswith("buy_"))
+# Обработчики покупки бананов (только для бананов)
+@router.callback_query(F.data.startswith("buy_banana_"))
 async def handle_buy_banana(callback: CallbackQuery):
-    banana_type = callback.data.replace("buy_", "")
+    banana_type = callback.data.replace("buy_banana_", "")
     
     if banana_type not in BANANA_TYPES:
         await callback.answer("❌ Неизвестный тип банана!", show_alert=True)
@@ -710,9 +710,9 @@ async def handle_buy_banana(callback: CallbackQuery):
         await callback.answer(message, show_alert=True)
 
 # Обработчики использования бананов
-@router.callback_query(F.data.startswith("use_"))
+@router.callback_query(F.data.startswith("use_banana_"))
 async def handle_use_banana(callback: CallbackQuery):
-    banana_type = callback.data.replace("use_", "")
+    banana_type = callback.data.replace("use_banana_", "")
     
     if banana_type not in BANANA_TYPES:
         await callback.answer("❌ Неизвестный тип банана!", show_alert=True)
@@ -734,7 +734,7 @@ async def handle_use_banana(callback: CallbackQuery):
     else:
         await callback.answer(message, show_alert=True)
 
-# ========== ОБРАБОТЧИКИ ПОКУПОК ==========
+# ========== ОБРАБОТЧИКИ ПОКУПОК УЛУЧШЕНИЙ ==========
 
 @router.callback_query(F.data == "buy_click")
 async def handle_buy_click(callback: CallbackQuery):

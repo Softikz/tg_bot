@@ -729,6 +729,7 @@ async def handle_use_banana(callback: CallbackQuery):
     
     if success:
         await callback.answer(message, show_alert=True)
+        # ОБНОВЛЯЕМ данные пользователя после использования банана
         user = ensure_and_update_offline(callback.from_user.id)
         await callback.message.edit_text(inventory_text(user), reply_markup=inventory_keyboard(user))
     else:
@@ -1156,3 +1157,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

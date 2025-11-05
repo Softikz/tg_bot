@@ -339,15 +339,21 @@ def effective_per_second(user: Dict) -> int:
 def has_active_banana(user: Dict) -> bool:
     """Проверяет, активен ли любой банан."""
     expires = user.get("gold_expires", 0)
-    return expires > current_time()
+    banana_type = user.get("active_banana_type", "")
+    return expires > current_time() and banana_type in BANANA_TYPES
 
 def get_active_banana_type(user: Dict) -> str:
     """Возвращает тип активного банана."""
-    return user.get("active_banana_type", "")
+    banana_type = user.get("active_banana_type", "")
+    return banana_type if banana_type in BANANA_TYPES else ""
 
 def get_active_banana_multiplier(user: Dict) -> float:
     """Возвращает множитель активного банана."""
-    return user.get("active_banana_multiplier", 1.0)
+    multiplier = user.get("active_banana_multiplier", 1.0)
+    banana_type = user.get("active_banana_type", "")
+    if banana_type not in BANANA_TYPES:
+        return 1.0
+    return multiplier
 
 def has_active_event(user: Dict) -> bool:
     expires = user.get("event_expires", 0)
@@ -368,3 +374,4 @@ def parse_event_duration(duration_str: str) -> int:
         return hours * 3600 + minutes * 60
     except ValueError as e:
         raise ValueError(f"Ошибка парсинга времени: {str(e)}")
+

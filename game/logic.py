@@ -244,13 +244,11 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
     current_time_val = current_time()
     new_expires = current_time_val + banana_data["duration"]
     
-    # Сохраняем все изменения сразу
+    # Сохраняем изменения - ТОЛЬКО те поля, которые точно есть в базе
     db.update_user(
         user_id, 
         inventory=inventory,
-        gold_expires=new_expires,
-        active_banana_type=banana_type,
-        active_banana_multiplier=banana_data["multiplier"]
+        gold_expires=new_expires
     )
     
     remaining = inventory.get(banana_type, 0)

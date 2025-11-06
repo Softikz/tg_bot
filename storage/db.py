@@ -17,6 +17,7 @@ class DB:
         self.conn.row_factory = sqlite3.Row
         self.cur = self.conn.cursor()
         self._create_tables()
+        self._add_missing_columns()
         self.conn.commit()
 
     def _create_tables(self):
@@ -34,14 +35,12 @@ class DB:
             per_second INTEGER DEFAULT 0,
             upgrades TEXT DEFAULT '{}',
             last_update REAL DEFAULT 0,
-            gold_expires REAL DEFAULT 0,
             rebirths INTEGER DEFAULT 0,
             event_expires REAL DEFAULT 0,
             event_multiplier REAL DEFAULT 1.0,
             event_type TEXT DEFAULT '',
             inventory TEXT DEFAULT '{}',
-            active_banana_type TEXT DEFAULT '',
-            active_banana_multiplier REAL DEFAULT 1.0
+            active_bananas TEXT DEFAULT '{}'
         )
         """)
 
@@ -62,14 +61,19 @@ class DB:
             self.cur.execute("PRAGMA table_info(users)")
             existing_columns = [column[1] for column in self.cur.fetchall()]
             
-            # Добавляем отсутствующие колонки
-            if 'active_banana_type' not in existing_columns:
-                self.cur.execute("ALTER TABLE users ADD COLUMN active_banana_type TEXT DEFAULT ''")
-                print("✅ Added active_banana_type column")
+            # Список необходимых колонок
+            required_columns = {
+                'active_bananas': "ALTER TABLE users ADD COLUMN active_bananas TEXT DEFAULT '{}'",
+                'event_expires': "ALTER TABLE users ADD COLUMN event_expires REAL DEFAULT 0",
+                'event_multiplier': "ALTER TABLE users ADD COLUMN event_multiplier REAL DEFAULT 1.0",
+                'event_type': "ALTER TABLE users ADD COLUMN event_type TEXT DEFAULT ''"
+            }
             
-            if 'active_banana_multiplier' not in existing_columns:
-                self.cur.execute("ALTER TABLE users ADD COLUMN active_banana_multiplier REAL DEFAULT 1.0")
-                print("✅ Added active_banana_multiplier column")
+            # Добавляем отсутствующие колонки
+            for column, sql in required_columns.items():
+                if column not in existing_columns:
+                    self.cur.execute(sql)
+                    print(f"✅ Added {column} column")
             
             self.conn.commit()
         except Exception as e:
@@ -85,9 +89,9 @@ class DB:
         if not self.cur.fetchone():
             now = time.time()
             self.cur.execute("""
-                INSERT INTO users (user_id, telegram_username, upgrades, inventory, last_update)
-                VALUES (?, ?, ?, ?, ?)
-            """, (user_id, telegram_username, "{}", "{}", now))
+                INSERT INTO users (user_id, telegram_username, upgrades, inventory, active_bananas, last_update)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, telegram_username, "{}", "{}", "{}", now))
             self.conn.commit()
 
     def get_user(self, user_id: int) -> Optional[Dict]:
@@ -100,7 +104,7 @@ class DB:
             return None
         user = dict(row)
         # безопасная распаковка JSON
-        for key in ["upgrades", "inventory"]:
+        for key in ["upgrades", "inventory", "active_bananas"]:
             try:
                 user[key] = json.loads(user.get(key) or "{}")
             except Exception:
@@ -119,7 +123,7 @@ class DB:
             
             updates, values = [], []
             for key, value in kwargs.items():
-                if key in ["upgrades", "inventory"]:
+                if key in ["upgrades", "inventory", "active_bananas"]:
                     value = json.dumps(value)
                 updates.append(f"{key} = ?")
                 values.append(value)
@@ -140,7 +144,7 @@ class DB:
         result = []
         for row in rows:
             user = dict(row)
-            for key in ["upgrades", "inventory"]:
+            for key in ["upgrades", "inventory", "active_bananas"]:
                 try:
                     user[key] = json.loads(user.get(key) or "{}")
                 except Exception:

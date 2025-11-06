@@ -1,6 +1,6 @@
 # game/logic.py
 import time
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List
 
 # Базовые настройки
 CLICK_BASE_COST = 50
@@ -240,17 +240,29 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
     if inventory[banana_type] <= 0:
         del inventory[banana_type]
     
-    # Активируем банан - устанавливаем время окончания
+    # Получаем текущие активные бананы
+    active_bananas = user.get("active_bananas", {}) or {}
     current_time_val = current_time()
-    new_expires = current_time_val + banana_data["duration"]
+    
+    # Если банан этого типа уже активен, добавляем время
+    if banana_type in active_bananas:
+        # Если время еще не истекло, добавляем к существующему
+        if active_bananas[banana_type] > current_time_val:
+            new_expires = active_bananas[banana_type] + banana_data["duration"]
+        else:
+            # Если время истекло, начинаем заново
+            new_expires = current_time_val + banana_data["duration"]
+    else:
+        # Если банан не активен, создаем новую запись
+        new_expires = current_time_val + banana_data["duration"]
+    
+    active_bananas[banana_type] = new_expires
     
     # Сохраняем изменения
     db.update_user(
         user_id, 
         inventory=inventory,
-        gold_expires=new_expires,
-        active_banana_type=banana_type,
-        active_banana_multiplier=banana_data["multiplier"]
+        active_bananas=active_bananas
     )
     
     remaining = inventory.get(banana_type, 0)
@@ -259,7 +271,7 @@ def use_banana(db, user_id: int, user: Dict, banana_type: str) -> Tuple[bool, st
     return True, (
         f"✅ {banana_data['name']} активирован! "
         f"+{banana_data['duration']//60} минут буста {banana_data['multiplier']}×.\n"
-        f"⏰ Осталось времени: {remaining_time//60:02d}:{remaining_time%60:02d}\n"
+        f"⏰ Общее время: {remaining_time//60:02d}:{remaining_time%60:02d}\n"
         f"📦 Осталось в инвентаре: {remaining}"
     )
 
@@ -311,18 +323,39 @@ def perform_rebirth(db, user_id: int, user: Dict) -> Tuple[bool, str]:
 
 # ---------- Утилиты для просмотра состояния ----------
 
-def effective_per_click(user: Dict) -> int:
-    upgrades = user.get("upgrades", {}) or {}
-    base = calculate_per_click(upgrades)
+def get_active_bananas_info(user: Dict) -> List[Tuple[str, float, int]]:
+    """Возвращает информацию о всех активных бананах: [(тип, множитель, оставшееся время), ...]."""
+    active_bananas = user.get("active_bananas", {}) or {}
+    current_time_val = current_time()
+    result = []
+    
+    for banana_type, expires in active_bananas.items():
+        if banana_type in BANANA_TYPES and expires > current_time_val:
+            banana_data = BANANA_TYPES[banana_type]
+            remaining = int(expires - current_time_val)
+            result.append((banana_type, banana_data["multiplier"], remaining))
+    
+    return result
+
+def get_total_multiplier(user: Dict) -> float:
+    """Возвращает общий множитель от всех активных бананов и ивентов."""
     multiplier = 1.0
     
-    # Умножаем на активный банан если есть
-    if has_active_banana(user):
-        multiplier *= user.get("active_banana_multiplier", 1.0)
+    # Суммируем множители от активных бананов
+    active_bananas_info = get_active_bananas_info(user)
+    for banana_type, banana_multiplier, remaining in active_bananas_info:
+        multiplier += (banana_multiplier - 1.0)  # Добавляем разницу от 1.0
     
     # Умножаем на ивент если активен
     if has_active_event(user):
         multiplier *= user.get("event_multiplier", 1.0)
+    
+    return multiplier
+
+def effective_per_click(user: Dict) -> int:
+    upgrades = user.get("upgrades", {}) or {}
+    base = calculate_per_click(upgrades)
+    multiplier = get_total_multiplier(user)
     
     return int(base * multiplier)
 
@@ -338,38 +371,9 @@ def effective_per_second(user: Dict) -> int:
     
     return int(base * multiplier)
 
-def has_active_banana(user: Dict) -> bool:
-    """Проверяет, активен ли любой банан."""
-    expires = user.get("gold_expires", 0)
-    banana_type = user.get("active_banana_type", "")
-    # Проверяем что время не истекло И тип банана существует
-    return expires > current_time() and banana_type in BANANA_TYPES
-
-def get_active_banana_type(user: Dict) -> str:
-    """Возвращает тип активного банана."""
-    banana_type = user.get("active_banana_type", "")
-    # Возвращаем только если тип существует и активен
-    if banana_type in BANANA_TYPES and has_active_banana(user):
-        return banana_type
-    return ""
-
-def get_active_banana_multiplier(user: Dict) -> float:
-    """Возвращает множитель активного банана."""
-    if has_active_banana(user):
-        return user.get("active_banana_multiplier", 1.0)
-    return 1.0
-
-def get_active_banana_info(user: Dict) -> Tuple[str, float, int]:
-    """Возвращает информацию об активном банане: (тип, множитель, оставшееся время)."""
-    if not has_active_banana(user):
-        return "", 1.0, 0
-    
-    banana_type = user.get("active_banana_type", "")
-    multiplier = user.get("active_banana_multiplier", 1.0)
-    expires = user.get("gold_expires", 0)
-    remaining = max(0, int(expires - current_time()))
-    
-    return banana_type, multiplier, remaining
+def has_active_bananas(user: Dict) -> bool:
+    """Проверяет, есть ли активные бананы."""
+    return len(get_active_bananas_info(user)) > 0
 
 def has_active_event(user: Dict) -> bool:
     expires = user.get("event_expires", 0)

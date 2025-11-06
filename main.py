@@ -54,12 +54,16 @@ async def banana_cleaner_loop(db: DB, interval: int = 60):
             for user in users:
                 # Проверяем, истекло ли время банана
                 if user.get("gold_expires", 0) > 0 and user.get("gold_expires", 0) <= current_time_val:
-                    db.update_user(
-                        user["user_id"],
-                        active_banana_type="",
-                        active_banana_multiplier=1.0
-                    )
-                    cleaned_count += 1
+                    try:
+                        db.update_user(
+                            user["user_id"],
+                            active_banana_type="",
+                            active_banana_multiplier=1.0
+                        )
+                        cleaned_count += 1
+                    except Exception as e:
+                        logger.warning(f"⚠️ Could not clean banana for user {user['user_id']}: {e}")
+                        continue
             
             if cleaned_count > 0:
                 logger.info(f"🧹 Очищено {cleaned_count} просроченных бананов")
@@ -85,7 +89,8 @@ async def main():
     # Фоновые задачи
     asyncio.create_task(passive_income_loop(db))
     asyncio.create_task(event_checker_loop(db))
-    asyncio.create_task(banana_cleaner_loop(db))
+    # Временно отключаем очистку бананов до исправления базы
+    # asyncio.create_task(banana_cleaner_loop(db))
     logger.info("✅ Background tasks started")
 
     # Запуск long polling

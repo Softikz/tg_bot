@@ -6,7 +6,7 @@ import os
 from typing import List, Dict, Optional
 
 
-class DB:  # ← ИЗМЕНИЛ НА БОЛЬШУЮ БУКВУ
+class DB:
     def __init__(self, path: str = "/data/database.db"):
         """
         Подключение к постоянной базе данных (в Railway сохраняется в /data)
@@ -55,6 +55,26 @@ class DB:  # ← ИЗМЕНИЛ НА БОЛЬШУЮ БУКВУ
         )
         """)
 
+    def _add_missing_columns(self):
+        """Добавляет отсутствующие колонки в таблицу users."""
+        try:
+            # Проверяем существование колонок
+            self.cur.execute("PRAGMA table_info(users)")
+            existing_columns = [column[1] for column in self.cur.fetchall()]
+            
+            # Добавляем отсутствующие колонки
+            if 'active_banana_type' not in existing_columns:
+                self.cur.execute("ALTER TABLE users ADD COLUMN active_banana_type TEXT DEFAULT ''")
+                print("✅ Added active_banana_type column")
+            
+            if 'active_banana_multiplier' not in existing_columns:
+                self.cur.execute("ALTER TABLE users ADD COLUMN active_banana_multiplier REAL DEFAULT 1.0")
+                print("✅ Added active_banana_multiplier column")
+            
+            self.conn.commit()
+        except Exception as e:
+            print(f"⚠️ Error adding columns: {e}")
+
     # ---------- Пользователи ----------
 
     def create_user_if_not_exists(self, user_id: int, telegram_username: str):
@@ -94,6 +114,9 @@ class DB:  # ← ИЗМЕНИЛ НА БОЛЬШУЮ БУКВУ
         if not kwargs:
             return
         try:
+            # Сначала убедимся что все колонки существуют
+            self._add_missing_columns()
+            
             updates, values = [], []
             for key, value in kwargs.items():
                 if key in ["upgrades", "inventory"]:

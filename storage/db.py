@@ -224,6 +224,10 @@ class DB:
             log.error(f"Error getting active events: {e}")
             return []
 
+    def check_and_remove_expired_events(self):
+        """Проверяет и удаляет просроченные ивенты (альяс для cleanup_expired_events)"""
+        self.cleanup_expired_events()
+
     def cleanup_expired_events(self):
         """Очищает просроченные ивенты"""
         try:
@@ -242,6 +246,7 @@ class DB:
             )
             
             self.conn.commit()
+            log.info("Expired events cleaned up successfully")
         except Exception as e:
             log.error(f"Error cleaning up expired events: {e}")
 
@@ -252,6 +257,8 @@ class DB:
             
             # Получаем всех пользователей с активными бананами
             users = self.all_users()
+            cleaned_count = 0
+            
             for user in users:
                 active_bananas = user.get("active_bananas", {})
                 if active_bananas:
@@ -262,6 +269,10 @@ class DB:
                     
                     if len(updated_bananas) != len(active_bananas):
                         self.update_user(user["user_id"], active_bananas=updated_bananas)
+                        cleaned_count += 1
+            
+            if cleaned_count > 0:
+                log.info(f"Cleaned expired bananas for {cleaned_count} users")
             
         except Exception as e:
             log.error(f"Error cleaning up expired bananas: {e}")

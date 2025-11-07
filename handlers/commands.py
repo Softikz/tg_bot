@@ -16,6 +16,7 @@ from game.logic import (
     apply_offline_gain,
     cost_for_upgrade,
     effective_per_click,
+    effective_per_second,
     has_active_event,
     calculate_per_click,
     calculate_per_second,
@@ -28,10 +29,9 @@ from game.logic import (
     use_banana,
     perform_rebirth,
     get_banana_data,
-    get_active_banana_type,
-    get_active_banana_multiplier,
-    has_active_banana,
-    get_active_banana_info,
+    get_active_bananas_info,
+    get_total_multiplier,
+    has_active_bananas,
     BANANA_TYPES
 )
 
@@ -93,21 +93,29 @@ def create_progress_bar(current: int, total: int, size: int = 10) -> str:
     empty = size - filled
     return "🟩" * filled + "⬜" * empty + f" {percentage}%"
 
+def get_active_banana_info(user: Dict):
+    """Получает информацию об активном банане (первом найденном)"""
+    active_bananas = get_active_bananas_info(user)
+    if active_bananas:
+        banana_type, multiplier, remaining = active_bananas[0]
+        return banana_type, multiplier, remaining
+    return None, 1.0, 0
+
 def profile_text(user: Dict) -> str:
     nickname = user.get('nickname', 'Неизвестно')
     text = (
         f"👤 Профиль {nickname}\n\n"
         f"🍌 Бананы: {int(user['bananas'])}\n"
         f"🖱 За клик: {effective_per_click(user)}\n"
-        f"⚙️ Пассивно: {user['per_second']} / сек\n"
+        f"⚙️ Пассивно: {effective_per_second(user)} / сек\n"
     )
     
     boosts = []
     current_time_val = time.time()
     
-    # Активный банан
-    banana_type, banana_multiplier, banana_remaining = get_active_banana_info(user)
-    if banana_type and banana_remaining > 0:
+    # Активные бананы
+    active_bananas = get_active_bananas_info(user)
+    for banana_type, banana_multiplier, banana_remaining in active_bananas:
         banana_data = get_banana_data(banana_type)
         min_remaining = banana_remaining // 60
         sec_remaining = banana_remaining % 60
@@ -219,14 +227,16 @@ def inventory_text(user: Dict) -> str:
     
     text = "🎒 Твой инвентарь:\n\n"
     
-    # Показываем активный банан если есть
-    banana_type, banana_multiplier, banana_remaining = get_active_banana_info(user)
-    if banana_type and banana_remaining > 0:
-        banana_data = get_banana_data(banana_type)
-        min_remaining = banana_remaining // 60
-        sec_remaining = banana_remaining % 60
-        text += f"⚡ Активный банан: {banana_data['name']} ({banana_multiplier}×)\n"
-        text += f"   ⏰ Осталось: {min_remaining:02d}:{sec_remaining:02d}\n\n"
+    # Показываем активные бананы если есть
+    active_bananas = get_active_bananas_info(user)
+    if active_bananas:
+        text += "⚡ Активные бананы:\n"
+        for banana_type, banana_multiplier, banana_remaining in active_bananas:
+            banana_data = get_banana_data(banana_type)
+            min_remaining = banana_remaining // 60
+            sec_remaining = banana_remaining % 60
+            text += f"• {banana_data['name']} ({banana_multiplier}×) - {min_remaining:02d}:{sec_remaining:02d}\n"
+        text += "\n"
     
     # Показываем все бананы в инвентаре
     for banana_type, banana_data in BANANA_TYPES.items():
@@ -588,9 +598,9 @@ async def handle_click(callback: CallbackQuery):
     boosts_info = []
     current_time_val = time.time()
     
-    # Активный банан
-    banana_type, banana_multiplier, banana_remaining = get_active_banana_info(user)
-    if banana_type and banana_remaining > 0:
+    # Активные бананы
+    active_bananas = get_active_bananas_info(user)
+    for banana_type, banana_multiplier, banana_remaining in active_bananas:
         banana_data = get_banana_data(banana_type)
         min_remaining = banana_remaining // 60
         sec_remaining = banana_remaining % 60
@@ -610,7 +620,7 @@ async def handle_click(callback: CallbackQuery):
         f"🍌 Клик! +{per_click}\n\n"
         f"Всего: {int(user['bananas'])} 🍌\n"
         f"За клик: {effective_per_click(user)}\n"
-        f"Пассив: {user['per_second']}/сек\n"
+        f"Пассив: {effective_per_second(user)}/сек\n"
     )
     
     if boosts_info:
@@ -984,10 +994,7 @@ async def handle_admin_confirm_reset(callback: CallbackQuery):
             upgrades={},
             rebirths=0,
             inventory={},
-            gold_expires=0,
-            active_banana_type="",
-            active_banana_multiplier=1.0,
-            active_banana_expires=0,
+            active_bananas={},
             event_type="",
             event_multiplier=1.0,
             event_expires=0

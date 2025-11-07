@@ -15,27 +15,27 @@ class DB:
         self.init_db()
 
     def init_db(self):
-        # Таблица пользователей       
+        # Таблица пользователей
         self.cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            user_id INTEGER PRIMARY KEY,
-            telegram_username TEXT,
-            nickname TEXT UNIQUE,
-            password_hash TEXT,
-            bananas REAL DEFAULT 0,
-            per_click INTEGER DEFAULT 1,
-            per_second REAL DEFAULT 0,
-            upgrades TEXT DEFAULT '{}',
-            rebirths INTEGER DEFAULT 0,
-            last_update REAL DEFAULT 0,
-            inventory TEXT DEFAULT '{}',
-            active_bananas TEXT DEFAULT '{}', 
-            event_type TEXT DEFAULT '',
-            event_multiplier REAL DEFAULT 1.0,
-            event_expires REAL DEFAULT 0,
-            created_at REAL DEFAULT 0
-        )
-    """)
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                telegram_username TEXT,
+                nickname TEXT UNIQUE,
+                password_hash TEXT,
+                bananas REAL DEFAULT 0,
+                per_click INTEGER DEFAULT 1,
+                per_second REAL DEFAULT 0,
+                upgrades TEXT DEFAULT '{}',
+                rebirths INTEGER DEFAULT 0,
+                last_update REAL DEFAULT 0,
+                inventory TEXT DEFAULT '{}',
+                active_bananas TEXT DEFAULT '{}',
+                event_type TEXT DEFAULT '',
+                event_multiplier REAL DEFAULT 1.0,
+                event_expires REAL DEFAULT 0,
+                created_at REAL DEFAULT 0
+            )
+        """)
         
         # Таблица активных ивентов
         self.cur.execute("""
@@ -62,11 +62,18 @@ class DB:
         self.conn.commit()
 
     def create_user_if_not_exists(self, user_id: int, telegram_username: str = "unknown"):
-        """Создает пользователя если он не существует"""
+        """Создает пользователя если он не существует с полными начальными данными"""
         try:
+            current_time = time.time()
+            # Создаем пользователя со всеми необходимыми полями
             self.cur.execute(
-                "INSERT OR IGNORE INTO users (user_id, telegram_username, created_at, last_update) VALUES (?, ?, ?, ?)",
-                (user_id, telegram_username, time.time(), time.time())
+                """INSERT OR IGNORE INTO users 
+                (user_id, telegram_username, bananas, per_click, per_second, upgrades, 
+                 rebirths, last_update, inventory, active_bananas, event_type, 
+                 event_multiplier, event_expires, created_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (user_id, telegram_username, 0, 1, 0, '{}', 0, current_time, 
+                 '{}', '{}', '', 1.0, 0, current_time)
             )
             self.conn.commit()
             return True
@@ -86,7 +93,7 @@ class DB:
             user = dict(zip(columns, row))
             
             # Парсим JSON поля
-            for field in ['upgrades', 'inventory']:
+            for field in ['upgrades', 'inventory', 'active_bananas']:
                 if user.get(field):
                     try:
                         user[field] = json.loads(user[field])
@@ -104,7 +111,7 @@ class DB:
         """Обновляет данные пользователя"""
         try:
             # Обрабатываем JSON поля
-            for field in ['upgrades', 'inventory']:
+            for field in ['upgrades', 'inventory', 'active_bananas']:
                 if field in kwargs and isinstance(kwargs[field], (dict, list)):
                     kwargs[field] = json.dumps(kwargs[field])
             
@@ -132,7 +139,7 @@ class DB:
                 user = dict(zip(columns, row))
                 
                 # Парсим JSON поля
-                for field in ['upgrades', 'inventory']:
+                for field in ['upgrades', 'inventory', 'active_bananas']:
                     if user.get(field):
                         try:
                             user[field] = json.loads(user[field])
@@ -160,7 +167,7 @@ class DB:
             user = dict(zip(columns, row))
             
             # Парсим JSON поля
-            for field in ['upgrades', 'inventory']:
+            for field in ['upgrades', 'inventory', 'active_bananas']:
                 if user.get(field):
                     try:
                         user[field] = json.loads(user[field])
@@ -243,13 +250,19 @@ class DB:
         try:
             current_time = time.time()
             
-            # Сбрасываем просроченные бананы
-            self.cur.execute(
-                "UPDATE users SET active_banana_type = '', active_banana_multiplier = 1.0, active_banana_expires = 0 WHERE active_banana_expires > 0 AND active_banana_expires < ?",
-                (current_time,)
-            )
+            # Получаем всех пользователей с активными бананами
+            users = self.all_users()
+            for user in users:
+                active_bananas = user.get("active_bananas", {})
+                if active_bananas:
+                    updated_bananas = {}
+                    for banana_type, expires in active_bananas.items():
+                        if expires > current_time:
+                            updated_bananas[banana_type] = expires
+                    
+                    if len(updated_bananas) != len(active_bananas):
+                        self.update_user(user["user_id"], active_bananas=updated_bananas)
             
-            self.conn.commit()
         except Exception as e:
             log.error(f"Error cleaning up expired bananas: {e}")
 
@@ -298,7 +311,7 @@ class DB:
                 user = dict(zip(columns, row))
                 
                 # Парсим JSON поля
-                for field in ['upgrades', 'inventory']:
+                for field in ['upgrades', 'inventory', 'active_bananas']:
                     if user.get(field):
                         try:
                             user[field] = json.loads(user[field])
@@ -317,4 +330,3 @@ class DB:
     def close(self):
         """Закрывает соединение с базой данных"""
         self.conn.close()
-

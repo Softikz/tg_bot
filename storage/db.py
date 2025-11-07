@@ -15,30 +15,27 @@ class DB:
         self.init_db()
 
     def init_db(self):
-        # Таблица пользователей
+        # Таблица пользователей       
         self.cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                telegram_username TEXT,
-                nickname TEXT UNIQUE,
-                password_hash TEXT,
-                bananas REAL DEFAULT 0,
-                per_click INTEGER DEFAULT 1,
-                per_second REAL DEFAULT 0,
-                upgrades TEXT DEFAULT '{}',
-                rebirths INTEGER DEFAULT 0,
-                last_update REAL DEFAULT 0,
-                inventory TEXT DEFAULT '{}',
-                gold_expires REAL DEFAULT 0,
-                active_banana_type TEXT DEFAULT '',
-                active_banana_multiplier REAL DEFAULT 1.0,
-                active_banana_expires REAL DEFAULT 0,
-                event_type TEXT DEFAULT '',
-                event_multiplier REAL DEFAULT 1.0,
-                event_expires REAL DEFAULT 0,
-                created_at REAL DEFAULT 0
-            )
-        """)
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            telegram_username TEXT,
+            nickname TEXT UNIQUE,
+            password_hash TEXT,
+            bananas REAL DEFAULT 0,
+            per_click INTEGER DEFAULT 1,
+            per_second REAL DEFAULT 0,
+            upgrades TEXT DEFAULT '{}',
+            rebirths INTEGER DEFAULT 0,
+            last_update REAL DEFAULT 0,
+            inventory TEXT DEFAULT '{}',
+            active_bananas TEXT DEFAULT '{}', 
+            event_type TEXT DEFAULT '',
+            event_multiplier REAL DEFAULT 1.0,
+            event_expires REAL DEFAULT 0,
+            created_at REAL DEFAULT 0
+        )
+    """)
         
         # Таблица активных ивентов
         self.cur.execute("""
@@ -320,3 +317,4 @@ class DB:
     def close(self):
         """Закрывает соединение с базой данных"""
         self.conn.close()
+

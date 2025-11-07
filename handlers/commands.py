@@ -441,13 +441,25 @@ async def process_registration_password(message: types.Message, state: FSMContex
     # Хешируем пароль
     hashed_password = hash_password(password)
     
-    # Создаем пользователя с новыми полями
+    # СОЗДАЕМ пользователя с ВСЕМИ полями
     db.create_user_if_not_exists(user_id, telegram_username)
     db.update_user(
         user_id,
         nickname=nickname,
         password_hash=hashed_password,
-        telegram_username=telegram_username
+        telegram_username=telegram_username,
+        bananas=0,
+        per_click=1,
+        per_second=0,
+        upgrades={},
+        rebirths=0,
+        inventory={},
+        active_bananas={},
+        event_type="",
+        event_multiplier=1.0,
+        event_expires=0,
+        last_update=time.time(),
+        created_at=time.time()
     )
     
     # Уведомляем админа о новой регистрации
@@ -1147,3 +1159,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
+

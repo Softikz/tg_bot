@@ -12,12 +12,47 @@ class DB:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path, check_same_thread=False)
         self.cur = self.conn.cursor()
-        self.init_db()
+        self._safe_init_db()
 
-    def init_db(self):
-        # Таблица пользователей
+    def _safe_init_db(self):
+        """Безопасная инициализация базы без потери данных"""
+        try:
+            # Проверяем существование таблицы users
+            self.cur.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='users'
+            """)
+            users_table_exists = self.cur.fetchone() is not None
+            
+            if not users_table_exists:
+                log.info("Создаем таблицу users...")
+                self._create_users_table()
+            else:
+                # Проверяем наличие новых полей
+                self.cur.execute("PRAGMA table_info(users)")
+                columns = [column[1] for column in self.cur.fetchall()]
+                
+                # Добавляем отсутствующие поля
+                if 'active_bananas' not in columns:
+                    log.info("Добавляем поле active_bananas...")
+                    self.cur.execute("ALTER TABLE users ADD COLUMN active_bananas TEXT DEFAULT '{}'")
+                
+                if 'created_at' not in columns:
+                    log.info("Добавляем поле created_at...")
+                    self.cur.execute("ALTER TABLE users ADD COLUMN created_at REAL DEFAULT 0")
+            
+            # Создаем остальные таблицы
+            self._create_other_tables()
+            self.conn.commit()
+            
+        except Exception as e:
+            log.error(f"Ошибка инициализации базы: {e}")
+            self.conn.rollback()
+
+    def _create_users_table(self):
+        """Создает таблицу пользователей"""
         self.cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE users (
                 user_id INTEGER PRIMARY KEY,
                 telegram_username TEXT,
                 nickname TEXT UNIQUE,
@@ -36,8 +71,9 @@ class DB:
                 created_at REAL DEFAULT 0
             )
         """)
-        
-        # Таблица активных ивентов
+
+    def _create_other_tables(self):
+        """Создает остальные таблицы"""
         self.cur.execute("""
             CREATE TABLE IF NOT EXISTS active_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +84,6 @@ class DB:
             )
         """)
         
-        # Таблица сессий (для будущего использования)
         self.cur.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 session_id TEXT PRIMARY KEY,
@@ -58,16 +93,20 @@ class DB:
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
             )
         """)
-        
-        self.conn.commit()
 
     def create_user_if_not_exists(self, user_id: int, telegram_username: str = "unknown"):
         """Создает пользователя если он не существует с полными начальными данными"""
         try:
             current_time = time.time()
-            # Создаем пользователя со всеми необходимыми полями
+            
+            # Проверяем, существует ли пользователь
+            existing_user = self.get_user(user_id)
+            if existing_user:
+                return True
+                
+            # Создаем нового пользователя
             self.cur.execute(
-                """INSERT OR IGNORE INTO users 
+                """INSERT INTO users 
                 (user_id, telegram_username, bananas, per_click, per_second, upgrades, 
                  rebirths, last_update, inventory, active_bananas, event_type, 
                  event_multiplier, event_expires, created_at) 
@@ -76,9 +115,13 @@ class DB:
                  '{}', '{}', '', 1.0, 0, current_time)
             )
             self.conn.commit()
+            log.info(f"✅ Создан новый пользователь: {user_id}")
+            return True
+        except sqlite3.IntegrityError:
+            # Пользователь уже существует
             return True
         except Exception as e:
-            log.error(f"Error creating user {user_id}: {e}")
+            log.error(f"❌ Ошибка создания пользователя {user_id}: {e}")
             return False
 
     def get_user(self, user_id: int) -> Optional[Dict]:
@@ -104,7 +147,7 @@ class DB:
             
             return user
         except Exception as e:
-            log.error(f"Error getting user {user_id}: {e}")
+            log.error(f"Ошибка получения пользователя {user_id}: {e}")
             return None
 
     def update_user(self, user_id: int, **kwargs):
@@ -124,7 +167,7 @@ class DB:
             self.conn.commit()
             return True
         except Exception as e:
-            log.error(f"Error updating user {user_id}: {e}")
+            log.error(f"Ошибка обновления пользователя {user_id}: {e}")
             return False
 
     def all_users(self) -> List[Dict]:
@@ -152,7 +195,7 @@ class DB:
             
             return users
         except Exception as e:
-            log.error(f"Error getting all users: {e}")
+            log.error(f"Ошибка получения всех пользователей: {e}")
             return []
 
     def get_user_by_nickname(self, nickname: str) -> Optional[Dict]:
@@ -178,7 +221,7 @@ class DB:
             
             return user
         except Exception as e:
-            log.error(f"Error getting user by nickname {nickname}: {e}")
+            log.error(f"Ошибка получения пользователя по никнейму {nickname}: {e}")
             return None
 
     def is_nickname_taken(self, nickname: str) -> bool:
@@ -204,9 +247,10 @@ class DB:
             )
             
             self.conn.commit()
+            log.info(f"✅ Ивент запущен: {event_type} x{multiplier}")
             return True
         except Exception as e:
-            log.error(f"Error starting event for all users: {e}")
+            log.error(f"❌ Ошибка запуска ивента: {e}")
             return False
 
     def get_active_events(self) -> List[Dict]:
@@ -221,11 +265,11 @@ class DB:
             columns = [desc[0] for desc in self.cur.description]
             return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
-            log.error(f"Error getting active events: {e}")
+            log.error(f"Ошибка получения активных ивентов: {e}")
             return []
 
     def check_and_remove_expired_events(self):
-        """Проверяет и удаляет просроченные ивенты (альяс для cleanup_expired_events)"""
+        """Проверяет и удаляет просроченные ивенты"""
         self.cleanup_expired_events()
 
     def cleanup_expired_events(self):
@@ -246,18 +290,14 @@ class DB:
             )
             
             self.conn.commit()
-            log.info("Expired events cleaned up successfully")
         except Exception as e:
-            log.error(f"Error cleaning up expired events: {e}")
+            log.error(f"Ошибка очистки ивентов: {e}")
 
     def cleanup_expired_bananas(self):
         """Очищает просроченные бананы"""
         try:
             current_time = time.time()
-            
-            # Получаем всех пользователей с активными бананами
             users = self.all_users()
-            cleaned_count = 0
             
             for user in users:
                 active_bananas = user.get("active_bananas", {})
@@ -269,13 +309,9 @@ class DB:
                     
                     if len(updated_bananas) != len(active_bananas):
                         self.update_user(user["user_id"], active_bananas=updated_bananas)
-                        cleaned_count += 1
-            
-            if cleaned_count > 0:
-                log.info(f"Cleaned expired bananas for {cleaned_count} users")
             
         except Exception as e:
-            log.error(f"Error cleaning up expired bananas: {e}")
+            log.error(f"Ошибка очистки бананов: {e}")
 
     def get_user_count(self) -> int:
         """Возвращает количество пользователей"""
@@ -283,7 +319,7 @@ class DB:
             self.cur.execute("SELECT COUNT(*) FROM users")
             return self.cur.fetchone()[0]
         except Exception as e:
-            log.error(f"Error getting user count: {e}")
+            log.error(f"Ошибка получения количества пользователей: {e}")
             return 0
 
     def get_total_bananas(self) -> float:
@@ -293,7 +329,7 @@ class DB:
             result = self.cur.fetchone()[0]
             return result if result else 0
         except Exception as e:
-            log.error(f"Error getting total bananas: {e}")
+            log.error(f"Ошибка получения общего количества бананов: {e}")
             return 0
 
     def get_total_rebirths(self) -> int:
@@ -303,7 +339,7 @@ class DB:
             result = self.cur.fetchone()[0]
             return result if result else 0
         except Exception as e:
-            log.error(f"Error getting total rebirths: {e}")
+            log.error(f"Ошибка получения общего количества перерождений: {e}")
             return 0
 
     def get_recent_users(self, hours: int = 24) -> List[Dict]:
@@ -321,7 +357,6 @@ class DB:
             for row in rows:
                 user = dict(zip(columns, row))
                 
-                # Парсим JSON поля
                 for field in ['upgrades', 'inventory', 'active_bananas']:
                     if user.get(field):
                         try:
@@ -335,7 +370,7 @@ class DB:
             
             return users
         except Exception as e:
-            log.error(f"Error getting recent users: {e}")
+            log.error(f"Ошибка получения новых пользователей: {e}")
             return []
 
     def close(self):

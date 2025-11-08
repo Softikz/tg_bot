@@ -93,6 +93,117 @@ class DB:
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
             )
         """)
+        
+        # Таблица для настроек бота (технический перерыв)
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS bot_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at REAL DEFAULT (strftime('%s','now'))
+            )
+        """)
+
+    # ... остальные методы остаются без изменений ...
+
+    def get_bot_setting(self, key: str, default: Any = None) -> Any:
+        """Получает настройку бота"""
+        try:
+            self.cur.execute("SELECT value FROM bot_settings WHERE key = ?", (key,))
+            result = self.cur.fetchone()
+            if result:
+                return result[0]
+            return default
+        except Exception as e:
+            log.error(f"Ошибка получения настройки {key}: {e}")
+            return default
+
+    def set_bot_setting(self, key: str, value: Any):
+        """Устанавливает настройку бота"""
+        try:
+            self.cur.execute(
+                """INSERT OR REPLACE INTO bot_settings (key, value, updated_at) 
+                VALUES (?, ?, ?)""",
+                (key, str(value), time.time())
+            )
+            self.conn.commit()
+            return True
+        except Exception as e:
+            log.error(f"Ошибка установки настройки {key}: {e}")
+            return False
+
+    def is_bot_paused(self) -> bool:
+        """Проверяет, находится ли бот на паузе"""
+        return self.get_bot_setting("paused", "false").lower() == "true"
+
+    def get_pause_message(self) -> str:
+        """Получает сообщение о техническом перерыве"""
+        return self.get_bot_setting("pause_message", "⚙️ Идёт технический перерыв...")
+
+    def set_bot_pause(self, paused: bool, message: str = ""):
+        """Устанавливает паузу для бота"""
+        self.set_bot_setting("paused", "true" if paused else "false")
+        if message:
+            self.set_bot_setting("pause_message", message)
+
+    # ... остальные методы без изменений ...                    log.info("Добавляем поле active_bananas...")
+                    self.cur.execute("ALTER TABLE users ADD COLUMN active_bananas TEXT DEFAULT '{}'")
+                
+                if 'created_at' not in columns:
+                    log.info("Добавляем поле created_at...")
+                    self.cur.execute("ALTER TABLE users ADD COLUMN created_at REAL DEFAULT 0")
+            
+            # Создаем остальные таблицы
+            self._create_other_tables()
+            self.conn.commit()
+            
+        except Exception as e:
+            log.error(f"Ошибка инициализации базы: {e}")
+            self.conn.rollback()
+
+    def _create_users_table(self):
+        """Создает таблицу пользователей"""
+        self.cur.execute("""
+            CREATE TABLE users (
+                user_id INTEGER PRIMARY KEY,
+                telegram_username TEXT,
+                nickname TEXT UNIQUE,
+                password_hash TEXT,
+                bananas REAL DEFAULT 0,
+                per_click INTEGER DEFAULT 1,
+                per_second REAL DEFAULT 0,
+                upgrades TEXT DEFAULT '{}',
+                rebirths INTEGER DEFAULT 0,
+                last_update REAL DEFAULT 0,
+                inventory TEXT DEFAULT '{}',
+                active_bananas TEXT DEFAULT '{}',
+                event_type TEXT DEFAULT '',
+                event_multiplier REAL DEFAULT 1.0,
+                event_expires REAL DEFAULT 0,
+                created_at REAL DEFAULT 0
+            )
+        """)
+
+    def _create_other_tables(self):
+        """Создает остальные таблицы"""
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS active_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_type TEXT,
+                event_multiplier REAL,
+                expires_at REAL,
+                created_at REAL DEFAULT (strftime('%s','now'))
+            )
+        """)
+        
+        self.cur.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id INTEGER,
+                created_at REAL,
+                expires_at REAL,
+                FOREIGN KEY (user_id) REFERENCES users (user_id)
+            )
+        """)
 
     def create_user_if_not_exists(self, user_id: int, telegram_username: str = "unknown"):
         """Создает пользователя если он не существует с полными начальными данными"""
@@ -376,3 +487,4 @@ class DB:
     def close(self):
         """Закрывает соединение с базой данных"""
         self.conn.close()
+

@@ -3867,7 +3867,6 @@ async def process_admin_bananas_amount(message: types.Message, state: FSMContext
         
     except ValueError:
         await message.answer("❌ Неверный формат числа. Введите целое число:")
-
 @router.message(AdminStates.waiting_for_event_duration)
 async def process_admin_event_duration(message: types.Message, state: FSMContext):
     try:
@@ -3931,6 +3930,3 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
         
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
-
-
-

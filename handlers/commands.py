@@ -79,11 +79,12 @@ def get_user_by_nickname(nickname: str):
 def is_bot_paused() -> bool:
     return db.is_bot_paused()
 
-def get_pause_message() -> str:
-    return db.get_pause_message()
+# Добавьте в handlers/commands.py после импортов:
+def is_bot_paused():
+    return db.is_bot_paused()
 
 def is_admin(user_id: int) -> bool:
-    return user_id == ADMIN_ID
+    return db.is_admin(user_id)
 
 # Обновленная функция для работы с пользователями
 def ensure_and_update_offline(user_id: int):
@@ -1422,3 +1423,4 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
 db = DB()
+

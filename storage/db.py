@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-class Database:
+class DB:
     def __init__(self, db_path: str = "bot_database.db"):
         self.db_path = db_path
         self.init_db()
@@ -227,3 +227,4 @@ class Database:
         except sqlite3.Error as e:
             logger.error(f"Error getting statistics: {e}")
             return {}
+

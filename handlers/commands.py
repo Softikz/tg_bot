@@ -71,10 +71,8 @@ def hash_password(password: str) -> str:
 def is_nickname_taken(nickname: str) -> bool:
     return db.is_nickname_taken(nickname)
 
-# Получение пользователя по никнейму
 def get_user_by_nickname(nickname: str):
     return db.get_user_by_nickname(nickname)
-
 # Проверка паузы бота
 def is_bot_paused() -> bool:
     return db.is_bot_paused()
@@ -1423,4 +1421,5 @@ async def process_admin_event_duration(message: types.Message, state: FSMContext
     except ValueError as e:
         await message.answer(f"❌ {str(e)}\n\nПопробуйте еще раз в формате 'часы:минуты':")
 db = DB()
+
 

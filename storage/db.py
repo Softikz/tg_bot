@@ -238,6 +238,113 @@ class DB:
             logger.error(f"Error deleting user {user_id}: {e}")
             return False
 
+     def is_bot_paused(self) -> bool:
+        """Проверка, находится ли бот в режиме паузы"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Создаем таблицу настроек бота если её нет
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS bot_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                cursor.execute('SELECT value FROM bot_settings WHERE key = ?', ('is_paused',))
+                result = cursor.fetchone()
+                
+                # Если настройка не найдена, возвращаем False (бот активен)
+                if result is None:
+                    return False
+                
+                return result[0] == 'True'
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error checking bot pause status: {e}")
+            return False
+
+    def set_bot_paused(self, paused: bool):
+        """Установка режима паузы для бота"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Создаем таблицу если её нет
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS bot_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO bot_settings (key, value)
+                    VALUES (?, ?)
+                ''', ('is_paused', str(paused)))
+                
+                conn.commit()
+                logger.info(f"Bot pause status set to: {paused}")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error setting bot pause status: {e}")
+
+    def is_admin(self, user_id: int) -> bool:
+        """Проверка, является ли пользователь администратором"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Создаем таблицу администраторов если её нет
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS admins (
+                        user_id INTEGER PRIMARY KEY,
+                        username TEXT,
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                cursor.execute('SELECT * FROM admins WHERE user_id = ?', (user_id,))
+                result = cursor.fetchone()
+                
+                return result is not None
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error checking admin status for user {user_id}: {e}")
+            return False
+
+    def add_admin(self, user_id: int, username: str = None):
+        """Добавление администратора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT OR REPLACE INTO admins (user_id, username)
+                    VALUES (?, ?)
+                ''', (user_id, username))
+                
+                conn.commit()
+                logger.info(f"Admin {user_id} added/updated")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error adding admin {user_id}: {e}")
+
+    def remove_admin(self, user_id: int):
+        """Удаление администратора"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('DELETE FROM admins WHERE user_id = ?', (user_id,))
+                conn.commit()
+                logger.info(f"Admin {user_id} removed")
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error removing admin {user_id}: {e}")
+    
     def get_statistics(self) -> dict:
         """Получение статистики базы данных"""
         try:
@@ -266,5 +373,6 @@ class DB:
         except sqlite3.Error as e:
             logger.error(f"Error getting statistics: {e}")
             return {}
+
 
 

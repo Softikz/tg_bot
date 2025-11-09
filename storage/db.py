@@ -334,6 +334,26 @@ class DB:
             logger.error(f"Error checking admin status for user {user_id}: {e}")
             return False
 
+    def get_user_by_nickname(self, nickname: str) -> Optional[Tuple]:
+    """Получение пользователя по никнейму"""
+    try:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Ищем пользователя по username (без @)
+            clean_nickname = nickname.lstrip('@')
+            cursor.execute(
+                'SELECT * FROM users WHERE username = ? OR username = ?', 
+                (clean_nickname, f"@{clean_nickname}")
+            )
+            result = cursor.fetchone()
+            
+            return result
+                
+    except sqlite3.Error as e:
+        logger.error(f"Error getting user by nickname {nickname}: {e}")
+        return None
+    
     def add_admin(self, user_id: int, username: str = None):
         """Добавление администратора"""
         try:
@@ -362,3 +382,4 @@ class DB:
                 
         except sqlite3.Error as e:
             logger.error(f"Error removing admin {user_id}: {e}")
+

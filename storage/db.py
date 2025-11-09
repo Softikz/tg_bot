@@ -124,6 +124,45 @@ class DB:
             logger.error(f"Error getting chat {chat_id}: {e}")
             return None
 
+    def all_users(self):
+        """Получение всех пользователей (аналог get_all_users)"""
+        return self.get_all_users()
+
+    def check_and_remove_expired_events(self):
+        """Проверка и удаление истекших событий"""
+        # Этот метод нужно реализовать в зависимости от вашей структуры событий
+        # Вот базовая реализация:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Создаем таблицу событий если её нет
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS events (
+                        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        event_type TEXT,
+                        expires_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (user_id)
+                    )
+                ''')
+                
+                # Удаляем истекшие события
+                cursor.execute('DELETE FROM events WHERE expires_at < CURRENT_TIMESTAMP')
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                
+                if deleted_count > 0:
+                    logger.info(f"Removed {deleted_count} expired events")
+                
+                return deleted_count
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Error checking expired events: {e}")
+            return 0
+    
     def get_user_messages(self, user_id: int, limit: int = 10) -> List[Tuple]:
         """Получение последних сообщений пользователя"""
         try:
@@ -227,4 +266,5 @@ class DB:
         except sqlite3.Error as e:
             logger.error(f"Error getting statistics: {e}")
             return {}
+
 

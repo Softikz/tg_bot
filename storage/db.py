@@ -49,6 +49,36 @@ class DB:
                     )
                 ''')
                 
+                # Таблица настроек бота
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS bot_settings (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Таблица администраторов
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS admins (
+                        user_id INTEGER PRIMARY KEY,
+                        username TEXT,
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                ''')
+                
+                # Таблица событий
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS events (
+                        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER,
+                        event_type TEXT,
+                        expires_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (user_id)
+                    )
+                ''')
+                
                 conn.commit()
                 logger.info("Database initialized successfully")
                 
@@ -124,45 +154,6 @@ class DB:
             logger.error(f"Error getting chat {chat_id}: {e}")
             return None
 
-    def all_users(self):
-        """Получение всех пользователей (аналог get_all_users)"""
-        return self.get_all_users()
-
-    def check_and_remove_expired_events(self):
-        """Проверка и удаление истекших событий"""
-        # Этот метод нужно реализовать в зависимости от вашей структуры событий
-        # Вот базовая реализация:
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                # Создаем таблицу событий если её нет
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS events (
-                        event_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        user_id INTEGER,
-                        event_type TEXT,
-                        expires_at TIMESTAMP,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (user_id)
-                    )
-                ''')
-                
-                # Удаляем истекшие события
-                cursor.execute('DELETE FROM events WHERE expires_at < CURRENT_TIMESTAMP')
-                
-                deleted_count = cursor.rowcount
-                conn.commit()
-                
-                if deleted_count > 0:
-                    logger.info(f"Removed {deleted_count} expired events")
-                
-                return deleted_count
-                    
-        except sqlite3.Error as e:
-            logger.error(f"Error checking expired events: {e}")
-            return 0
-    
     def get_user_messages(self, user_id: int, limit: int = 10) -> List[Tuple]:
         """Получение последних сообщений пользователя"""
         try:
@@ -209,6 +200,10 @@ class DB:
             logger.error(f"Error getting all users: {e}")
             return []
 
+    def all_users(self):
+        """Получение всех пользователей (аналог get_all_users)"""
+        return self.get_all_users()
+
     def get_all_chats(self) -> List[Tuple]:
         """Получение списка всех чатов"""
         try:
@@ -238,20 +233,61 @@ class DB:
             logger.error(f"Error deleting user {user_id}: {e}")
             return False
 
-     def is_bot_paused(self) -> bool:
-        """Проверка, находится ли бот в режиме паузы"""
+    def get_statistics(self) -> dict:
+        """Получение статистики базы данных"""
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Создаем таблицу настроек бота если её нет
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS bot_settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
+                cursor.execute('SELECT COUNT(*) FROM users')
+                users_count = cursor.fetchone()[0]
+                
+                cursor.execute('SELECT COUNT(*) FROM chats')
+                chats_count = cursor.fetchone()[0]
+                
+                cursor.execute('SELECT COUNT(*) FROM messages')
+                messages_count = cursor.fetchone()[0]
+                
+                cursor.execute('SELECT COUNT(DISTINCT user_id) FROM messages')
+                active_users = cursor.fetchone()[0]
+                
+                return {
+                    'users_count': users_count,
+                    'chats_count': chats_count,
+                    'messages_count': messages_count,
+                    'active_users': active_users
+                }
+                
+        except sqlite3.Error as e:
+            logger.error(f"Error getting statistics: {e}")
+            return {}
+
+    def check_and_remove_expired_events(self):
+        """Проверка и удаление истекших событий"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # Удаляем истекшие события
+                cursor.execute('DELETE FROM events WHERE expires_at < CURRENT_TIMESTAMP')
+                
+                deleted_count = cursor.rowcount
+                conn.commit()
+                
+                if deleted_count > 0:
+                    logger.info(f"Removed {deleted_count} expired events")
+                
+                return deleted_count
+                    
+        except sqlite3.Error as e:
+            logger.error(f"Error checking expired events: {e}")
+            return 0
+
+    def is_bot_paused(self) -> bool:
+        """Проверка, находится ли бот в режиме паузы"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
                 
                 cursor.execute('SELECT value FROM bot_settings WHERE key = ?', ('is_paused',))
                 result = cursor.fetchone()
@@ -272,15 +308,6 @@ class DB:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
-                # Создаем таблицу если её нет
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS bot_settings (
-                        key TEXT PRIMARY KEY,
-                        value TEXT,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
-                
                 cursor.execute('''
                     INSERT OR REPLACE INTO bot_settings (key, value)
                     VALUES (?, ?)
@@ -297,15 +324,6 @@ class DB:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                
-                # Создаем таблицу администраторов если её нет
-                cursor.execute('''
-                    CREATE TABLE IF NOT EXISTS admins (
-                        user_id INTEGER PRIMARY KEY,
-                        username TEXT,
-                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                ''')
                 
                 cursor.execute('SELECT * FROM admins WHERE user_id = ?', (user_id,))
                 result = cursor.fetchone()
@@ -344,35 +362,3 @@ class DB:
                 
         except sqlite3.Error as e:
             logger.error(f"Error removing admin {user_id}: {e}")
-    
-    def get_statistics(self) -> dict:
-        """Получение статистики базы данных"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                
-                cursor.execute('SELECT COUNT(*) FROM users')
-                users_count = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(*) FROM chats')
-                chats_count = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(*) FROM messages')
-                messages_count = cursor.fetchone()[0]
-                
-                cursor.execute('SELECT COUNT(DISTINCT user_id) FROM messages')
-                active_users = cursor.fetchone()[0]
-                
-                return {
-                    'users_count': users_count,
-                    'chats_count': chats_count,
-                    'messages_count': messages_count,
-                    'active_users': active_users
-                }
-                
-        except sqlite3.Error as e:
-            logger.error(f"Error getting statistics: {e}")
-            return {}
-
-
-

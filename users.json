@@ -1,0 +1,382 @@
+{
+  "5748972158": {
+    "name": "ⒸⒷⓀ|𝖚𝖓𝖎𝖎𝖐",
+    "title": "Фермер",
+    "level": 3,
+    "exp": 110,
+    "money": 354,
+    "stars": 664,
+    "beds": 6,
+    "permissions": 0,
+    "luck_tickets": 25,
+    "seeds": {
+      "🥕": 3,
+      "🧅": 0,
+      "🥔": 5,
+      "🍋": 35,
+      "🍒": 25,
+      "🌼": 0,
+      "🌾": 4
+    },
+    "harvest": {
+      "🥕": 0,
+      "🧅": 0,
+      "🌴 саженец пальмы": 8,
+      "🪵 древесина": 2,
+      "🥜 Комбикорм": 12,
+      "🔗 железо": 10,
+      "🌿 Силос": 75,
+      "📄 чертеж": 4,
+      "⛏️ Тяпка": 8,
+      "🪱 Червяк": 8,
+      "💩 Удобрение": 0,
+      "🪨 камень": 20,
+      "🍒 Семена вишни": 36,
+      "🍋 Семена лимона": 46
+    },
+    "vip_until": "2026-06-22T19:35:12.253120",
+    "beds_data": [
+      {
+        "crop": "🍋",
+        "planted_at": "2026-06-15T19:26:22.748862",
+        "grow_time": 240,
+        "last_planted": "2026-06-15T17:51:25.800697"
+      },
+      {
+        "crop": "🍋",
+        "planted_at": "2026-06-15T19:26:25.264980",
+        "grow_time": 240,
+        "last_planted": "2026-06-15T17:52:10.728267"
+      },
+      {
+        "crop": "🍋",
+        "planted_at": "2026-06-15T19:26:27.491009",
+        "grow_time": 240,
+        "last_planted": "2026-06-15T17:52:11.702279"
+      },
+      {
+        "crop": "🍒",
+        "planted_at": "2026-06-15T19:26:55.486603",
+        "grow_time": 240,
+        "last_planted": "2026-06-15T17:52:13.205571"
+      },
+      {
+        "crop": "🌼",
+        "planted_at": "2026-06-15T19:26:57.234266",
+        "grow_time": 240,
+        "last_planted": "2026-06-15T17:52:15.606221"
+      },
+      {
+        "crop": "🌾",
+        "planted_at": "2026-06-15T19:35:54.305829",
+        "grow_time": 60,
+        "last_planted": null
+      }
+    ],
+    "chop_guarded": [],
+    "permit_pending": "2026-06-11T23:19:56.618262",
+    "deliveries_completed": {},
+    "quests_completed": [],
+    "active_quest": null,
+    "tutorial_complete": true,
+    "quests": {
+      "completed": [
+        "first_harvest"
+      ],
+      "active": "first_money",
+      "progress": {
+        "first_money": 72
+      },
+      "chapter_progress": {
+        "1": 0,
+        "2": 0,
+        "3": 0,
+        "4": 0,
+        "5": 0
+      },
+      "planted_types": []
+    },
+    "level_reward_1": true,
+    "museum": {
+      "🥕 Овощи": {
+        "🥕 Морковь": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🧅 Лук": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🥔 Картофель": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🥦 Капуста": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🎃 Тыква": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍆 Баклажан": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍠 Батат": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      },
+      "🌾 Зерновые": {
+        "🌾 Пшеница": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🌽 Кукуруза": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍚 Рис": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      },
+      "🍓 Ягоды": {
+        "🍓 Клубника": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍇 Виноград": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      },
+      "🍎 Фрукты": {
+        "🍋 Лимон": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍒 Вишня": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍎 Яблоко": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍌 Банан": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      },
+      "🥚 Животноводство": {
+        "🥚 Яйца": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🧶 Шерсть": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🥛 Молоко": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🍄 Грибы": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      },
+      "🐟 Рыба": {
+        "🐡 Фугу": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🦐 Креветка": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🐟 Карась": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🐠 Окунь": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🦈 Щука": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        },
+        "🐋 Белуга": {
+          "bronze": false,
+          "silver": false,
+          "gold": false
+        }
+      }
+    },
+    "flowerbed": {
+      "slots": [
+        null,
+        null,
+        null
+      ],
+      "planted_at": [
+        null,
+        null,
+        null
+      ],
+      "honey": 0,
+      "sculptures": [],
+      "bee_bonus": 0,
+      "bee_bonus_uses": 0
+    },
+    "daily_tasks": {
+      "date": "2026-06-15",
+      "current": {
+        "task_clear_2": 5,
+        "task_plant_5": 11,
+        "task_earn_500": 0
+      },
+      "claimed": {}
+    },
+    "permit_ready": false,
+    "level_reward_2": true,
+    "read_lib_wheel": true,
+    "read_lib_mine": true,
+    "vip_request_pending": false,
+    "level_reward_3": true
+  },
+  "5359141082": {
+    "name": "🤦🏽‍♀️",
+    "title": "Новичок",
+    "level": 1,
+    "exp": 20,
+    "money": 0,
+    "stars": 10,
+    "beds": 3,
+    "permissions": 0,
+    "luck_tickets": 0,
+    "seeds": {
+      "🥕": 2,
+      "🧅": 2
+    },
+    "harvest": {
+      "🥕": 26,
+      "🧅": 24
+    },
+    "vip_until": "2026-05-25T23:36:06.242454",
+    "beds_data": [
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 1,
+        "last_planted": "2026-05-18T23:40:26.326541"
+      },
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 1,
+        "last_planted": "2026-05-18T23:40:26.326541"
+      },
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 1,
+        "last_planted": "2026-05-18T23:40:26.326541"
+      }
+    ],
+    "chop_guarded": [],
+    "permit_pending": null,
+    "permit_ready": false,
+    "tutorial_complete": true,
+    "play_time": "0ч",
+    "registered_at": "2026-05-18T00:00:43.216282",
+    "quests": {
+      "completed": [],
+      "active": null,
+      "progress": {},
+      "planted_types": []
+    },
+    "daily_tasks": {
+      "date": "2026-05-18",
+      "current": {
+        "task_plant_5": 5,
+        "task_harvest_3": 5,
+        "task_visit_3": 0
+      },
+      "claimed": {}
+    },
+    "vip_request_pending": false,
+    "level_reward_1": true
+  },
+  "5616252651": {
+    "name": "qqw",
+    "title": "Новичок",
+    "level": 1,
+    "exp": 0,
+    "money": 0,
+    "stars": 10,
+    "beds": 3,
+    "permissions": 0,
+    "luck_tickets": 0,
+    "seeds": {
+      "🥕": 10
+    },
+    "harvest": {},
+    "vip_until": "2026-06-22T20:14:36.880257",
+    "beds_data": [
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 0,
+        "last_planted": null
+      },
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 0,
+        "last_planted": null
+      },
+      {
+        "crop": null,
+        "planted_at": null,
+        "grow_time": 0,
+        "last_planted": null
+      }
+    ],
+    "chop_guarded": [],
+    "permit_pending": null,
+    "permit_ready": false,
+    "tutorial_complete": false,
+    "play_time": "0ч",
+    "registered_at": "2026-06-15T19:59:55.589262",
+    "vip_request_pending": false
+  }
+}
